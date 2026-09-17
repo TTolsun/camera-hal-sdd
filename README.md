@@ -4,6 +4,24 @@
 
 핵심 원칙은 하나입니다. **C++ 구조는 Clang이 읽고, LLM은 서술만 합니다.** LLM은 사실(facts) 블록에 있는 내용만 쓸 수 있고, 모든 문장에 `파일:줄` 인용을 붙여야 하며, 인용이 사실에 없으면 문서는 `needs-review` 상태로 사람에게 넘어갑니다.
 
+## 무엇이 나오는가
+
+아래는 `examples/mini-hal/`(작은 C++ HAL 예제)을 사내형 소형 모델 `qwen3.5:4b`(Ollama)로 실제 실행해 얻은 페이지입니다. 표, 번호 목록, 다이어그램은 모두 libclang 이 읽은 사실에서 파이프라인이 직접 만든 것이고, LLM 은 그 아래 문단만 썼습니다.
+
+**시나리오 페이지.** 진입 함수에서 시작하는 호출 순서를 시퀀스 다이어그램과 번호 목록으로 보여 줍니다. 가상 함수 호출은 "virtual 후보"(점선)로, 함수 포인터 호출은 "정적 추적 불가"로 표시되어 정적 분석이 어디서 끊기는지 독자가 바로 압니다. 각 단계 끝의 `파일:줄`이 근거입니다.
+
+![캡처 요청 처리 시나리오 페이지](docs/images/sdd-scenario.png)
+
+**시스템 개요 페이지.** 첫 줄은 독자가 먼저 할 일이고, 그다음 표가 "지금 확인할 내용 → 이동할 절"입니다. 패키지 표, 패키지 의존 표, HAL 진입점 표, 코드를 처음 읽는 순서까지 사실에서 나옵니다. 왼쪽 목차의 `ok` 배지는 인용 검증을 통과했다는 뜻입니다.
+
+![시스템 개요 페이지](docs/images/sdd-overview.png)
+
+**컴포넌트 페이지.** 클래스 다이어그램과 패키지별 클래스 표(선언 위치, 상속, 소스 주석)를 먼저 놓고, 패키지마다 LLM 이 소유·의존 관계를 서술합니다. 절마다 접힌 "근거와 검토 정보"에 근거 파일, 인용 검증 결과, 검토 상태가 남습니다.
+
+![컴포넌트 구조와 책임 페이지](docs/images/sdd-components.png)
+
+스크린샷은 `sdd export-html --pages <페이지>` 로 만든 단일 HTML 을 찍은 것입니다. 전체 결과는 [examples/mini-hal/expected-output/](examples/mini-hal/expected-output/) 에 Markdown 과 단일 HTML(`sdd.html`)로 있습니다.
+
 ```
 Gerrit change (또는 nightly)
    │  git diff → 변경 파일 / 클래스 / 시나리오
@@ -72,6 +90,13 @@ uv run sdd generate          # 전체 섹션 생성 → sdd/*.md
 
 ```bash
 uv run sdd run --base origin/main     # extract → impact → 영향 섹션만 generate
+```
+
+파일 하나짜리 HTML 이 필요하면(메일 첨부, 리뷰 코멘트, 오프라인 열람):
+
+```bash
+uv run sdd export-html --out build/sdd.html          # 전체
+uv run sdd export-html --pages scenarios/flush.md    # 한 페이지만
 ```
 
 LLM 없이 파이프라인만 점검하려면 `sdd.local.yaml` 에 `agent: {kind: dry-run}` 을 두면 됩니다. 프롬프트가 `build/prompts/` 에 기록됩니다.

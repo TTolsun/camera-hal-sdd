@@ -414,12 +414,20 @@ class Generator:
         if not path.exists():
             return ""
         text = _FRONTMATTER.sub("", path.read_text(encoding="utf-8"), count=1)
-        return re.sub(r"^# .*\n", "", text, count=1).strip()
+        text = re.sub(r"^# .*\n", "", text, count=1)
+        # 표, 다이어그램, 근거 블록, 번호 목록, 다음 단계 줄은 파이프라인이 다시 만든다. LLM 에는 문단만 돌려준다.
+        text = re.sub(r"```mermaid.*?```", "", text, flags=re.S)
+        text = re.sub(r"^\?\?\? note.*?(?=^\S|\Z)", "", text, flags=re.S | re.M)
+        kept = [l for l in text.splitlines()
+                if not l.lstrip().startswith("|") and not l.startswith("다음 단계:")
+                and not re.match(r"^\s*\d+\. ", l)]
+        return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
     @staticmethod
     def _write(path: Path, text: str) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text.rstrip() + "\n", encoding="utf-8")
+        # 플랫폼과 무관하게 LF 로 쓴다. Windows 개발자와 Linux CI 가 같은 파일을 만들어야 diff 가 조용하다.
+        path.write_text(text.rstrip() + "\n", encoding="utf-8", newline="\n")
         return path
 
 
@@ -492,19 +500,20 @@ def _steps(sc: Scenario) -> str:
     """연속 중복을 합친 번호 목록. 각 단계에 file:line 을 붙인다."""
     lines: list[str] = []
     prev: tuple[str, str, str] | None = None
+    truncated = False
     for m in sc.messages:
         key = (m.src, m.dst, m.name)
         if key == prev:
             continue
         prev = key
+        if len(lines) >= _MAX_STEPS:
+            truncated = True
+            break
         cite = f" `{m.loc.cite()}`" if m.loc else ""
         note = f" ({m.note})" if m.note else ""
         lines.append(f"{len(lines) + 1}. `{m.src}` 가 `{m.dst}::{m.name}()` 를 호출합니다.{note}{cite}")
-        if len(lines) >= _MAX_STEPS:
-            break
-    total = len({(m.src, m.dst, m.name) for m in sc.messages})
-    if total > len(lines):
-        lines.append(f"\n(이후 {total - len(lines)} 단계는 생략했습니다. 전체 흐름은 위 다이어그램을 보세요.)")
+    if truncated:
+        lines.append("\n(이후 단계는 생략했습니다. 전체 흐름은 위 다이어그램을 보세요.)")
     return "\n".join(lines) if lines else "호출 순서를 얻지 못했습니다. 확인 필요: 진입 함수 시그니처가 clang-uml 설정과 맞는지 확인하세요."
 
 

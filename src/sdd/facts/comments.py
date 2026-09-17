@@ -30,7 +30,7 @@ _CONTAINER_KINDS = {cindex.CursorKind.NAMESPACE, cindex.CursorKind.TRANSLATION_U
                     cindex.CursorKind.UNEXPOSED_DECL} | set(_CLASS_KINDS)
 
 # 컴파일 전용 플래그. 파싱에는 필요 없고 libclang 이 거부할 수 있어 제거한다.
-_DROP_WITH_VALUE = {"-o", "-MF", "-MT", "-MQ", "-MD", "-MMD", "-Xclang", "-fdebug-compilation-dir"}
+_DROP_WITH_VALUE = {"-o", "-MF", "-MT", "-MQ", "-Xclang", "-fdebug-compilation-dir"}
 _DROP_ALONE = {"-c", "-MD", "-MMD", "-MP", "-fPIC", "-fPIE", "-pipe", "-g", "-gdwarf-4", "-gdwarf-5"}
 _DROP_PREFIX = ("-O", "-Wa,", "-Wl,", "-fstack-protector", "-fuse-ld", "-flto", "-fprofile", "-fcoverage")
 

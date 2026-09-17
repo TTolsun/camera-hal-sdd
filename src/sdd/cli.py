@@ -143,7 +143,8 @@ def cmd_export_html(args: argparse.Namespace) -> int:
     cfg = _cfg(args)
     out = export(cfg, out=Path(args.out).resolve() if args.out else None,
                  mkdocs_yml=Path(args.mkdocs).resolve() if args.mkdocs else None,
-                 mermaid_src=args.mermaid, site_name=args.title)
+                 mermaid_src=args.mermaid, site_name=args.title,
+                 pages=args.pages.split(",") if args.pages else None)
     print(f"-> {out}")
     return 0
 
@@ -195,6 +196,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--mermaid", default="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs",
                    help="Mermaid ESM 경로. 사내망에서 CDN 이 막히면 로컬 파일 경로를 준다")
     s.add_argument("--title", default="Camera HAL SDD")
+    s.add_argument("--pages", help="담을 페이지를 쉼표로 나열 (예: overview.md,scenarios/flush.md). 생략하면 전체")
     s.set_defaults(fn=cmd_export_html)
 
     args = p.parse_args(argv)

@@ -32,6 +32,7 @@ sections:
       functions: ["camera_*", "HAL_*", "*_open", "*_close", "get_*"]
       classes: ["*"]         # 인용할 file:line 을 주기 위해 사실로는 넘기되,
       class_table: false     # 개요 페이지에 클래스 표는 그리지 않는다 (components.md 가 담당).
+      impact_classes: []     # 클래스 변경으로는 개요를 다시 만들지 않는다. watch 만 본다.
       reading_order: process_capture_request   # "코드를 처음 읽는 순서" 를 만들 시나리오
     routes:
       - q: 수정할 패키지를 찾습니다.

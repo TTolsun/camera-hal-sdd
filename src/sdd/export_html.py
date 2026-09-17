@@ -115,7 +115,8 @@ def _split(text: str) -> tuple[dict[str, Any], str]:
 def render_page(rel: str, text: str, known: set[str]) -> str:
     meta, body = _split(text)
     pid = _page_id(rel)
-    body = re.sub(r"^# .+\n", "", body, count=1)
+    # frontmatter 뒤에 빈 줄이 오므로 앞 공백을 허용한다. 제목은 페이지 헤더가 따로 붙인다.
+    body = re.sub(r"^\s*# .+\n", "", body, count=1)
     title = _title_of_text(text)
 
     def slug(value: str, sep: str) -> str:
@@ -176,11 +177,16 @@ def _norm(p: str) -> str:
 
 
 def export(cfg: Config, out: Path | None = None, mkdocs_yml: Path | None = None,
-           mermaid_src: str = _MERMAID_CDN, site_name: str = "Camera HAL SDD") -> Path:
+           mermaid_src: str = _MERMAID_CDN, site_name: str = "Camera HAL SDD",
+           pages: list[str] | None = None) -> Path:
+    """pages: sdd 루트 기준 상대 경로 목록. 주면 그 페이지만 담는다 (리뷰 코멘트에 한 절만 붙일 때, 스크린샷용)."""
     sdd_dir = cfg.sdd_dir
     entries = _nav_entries(mkdocs_yml or cfg.root / "mkdocs.yml", sdd_dir)
     entries = [e for e in entries if (sdd_dir / e[2]).exists()]
-    known = {e[2] for e in entries}
+    known = {e[2] for e in entries}          # 링크 대상은 전체 페이지 기준으로 남긴다
+    if pages:
+        wanted = {p.replace("\\", "/") for p in pages}
+        entries = [e for e in entries if e[2] in wanted]
 
     nav_html: list[str] = []
     sections: list[str] = []
@@ -206,5 +212,5 @@ def export(cfg: Config, out: Path | None = None, mkdocs_yml: Path | None = None,
 </body></html>"""
     out = out or (cfg.build_dir / "sdd.html")
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(doc, encoding="utf-8")
+    out.write_text(doc, encoding="utf-8", newline="\n")
     return out

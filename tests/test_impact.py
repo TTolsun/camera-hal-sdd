@@ -29,3 +29,10 @@ def test_impact_header_only_change_hits_overview(tmp_cfg, sample_model):
     assert "overview" in report.sections
     assert "threading" in report.sections
     assert "process_capture_request" not in report.scenarios
+
+
+def test_impact_classes_override_keeps_overview_out_of_symbol_rule(tmp_cfg, sample_model):
+    # overview 는 classes: ["*"] 를 인용용으로만 넘기고 impact_classes: [] 로 심볼 규칙에서 뺀다.
+    report = compute(tmp_cfg, sample_model, ["pipeline/FrameFactory.cpp"], base="a", head="b")
+    assert "overview" not in report.sections
+    assert "components" in report.sections

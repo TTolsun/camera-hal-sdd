@@ -31,7 +31,7 @@ class ImpactReport:
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(asdict(self), ensure_ascii=False, indent=1), encoding="utf-8")
+        path.write_text(json.dumps(asdict(self), ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
 
     @classmethod
     def load(cls, path: Path) -> "ImpactReport":
@@ -88,7 +88,9 @@ def compute(cfg: Config, model: KnowledgeModel, files: list[str], base: str, hea
     report.changed_classes = sorted(c.name for c in changed_classes)
     report.packages = sorted({c.package for c in changed_classes if c.package})
     for sec in sections:
-        patterns = sec.get("facts", {}).get("classes") or []
+        facts = sec.get("facts", {})
+        # impact_classes 가 있으면 그것을, 없으면 classes 를 쓴다 (개요처럼 인용용으로만 클래스를 넘기는 절 대응).
+        patterns = facts.get("impact_classes", facts.get("classes")) or []
         if not patterns:
             continue
         hit = [c.name for c in changed_classes if any(fnmatch.fnmatch(c.name, p) for p in patterns)]

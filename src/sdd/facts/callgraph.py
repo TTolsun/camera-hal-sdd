@@ -245,7 +245,9 @@ def trace(g: Graph, entry: FuncDef, depth: int) -> tuple[list[Message], int]:
                 targets = ([call.callee_usr] if base_def else []) + over
                 if len(targets) > 1:
                     note = "virtual 후보"
-                elif not targets:
+                elif targets:
+                    note = "virtual, 현재 구현 하나"   # 지금은 하나지만 동적 디스패치라는 사실은 남긴다.
+                else:
                     unresolved += 1
                     messages.append(Message(src=fd.owner, dst=call.callee_owner, name=call.callee_name,
                                             loc=call.loc, note="virtual, override 없음"))

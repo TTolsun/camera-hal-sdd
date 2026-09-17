@@ -5,7 +5,7 @@
 1. HAL 소스를 해당 patchset 으로 checkout 하고 `origin/<branch>` 와의 merge-base 를 구합니다.
 2. `sdd compdb` 로 compile DB 를 갱신합니다 (Android.mk 가 바뀌었을 수 있습니다).
 3. `sdd run --base <merge-base>` 로 영향 섹션만 다시 생성합니다.
-4. `sdd/` 변경분을 docs 저장소의 Gerrit change 로 push 합니다. topic 을 HAL change 번호로 맞춰 함께 리뷰되게 합니다.
+4. `sdd/` 를 docs 프로젝트의 로컬 clone(`DOCS_DIR`)에 복사하고, 그 clone 에서 commit 해 Gerrit change 로 push 합니다. 이 저장소(파이프라인 코드)의 HEAD 는 push 하지 않습니다. topic 을 HAL change 번호로 맞춰 함께 리뷰되게 합니다.
 
 ## nightly 전체 재생성
 

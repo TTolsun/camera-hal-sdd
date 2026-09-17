@@ -59,3 +59,10 @@ def test_libclang_extracts_comments_and_locations(tmp_cfg):
     assert fn.loc.line == 17 and fn.def_loc.line == 18
     assert fn.brief == "HAL 모듈 진입점"
     assert "FrameFactory.cpp:12" in model.citations()
+
+
+def test_parse_args_keeps_dependency_flags_out_of_libclang_input():
+    from sdd.facts import comments
+    e = {"directory": "/w", "file": "/w/a.cpp", "command": "clang++ -std=c++17 -c -MMD -MF a.d -MT a.o -o a.o /w/a.cpp"}
+    _, args = comments.parse_args(e)
+    assert args == ["-std=c++17", "-fparse-all-comments"]
