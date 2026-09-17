@@ -11,6 +11,7 @@
 #   SDD_AGENT_API_KEY  (openai-compatible 게이트웨이를 쓸 때만)
 #   DOCS_DIR           docs 프로젝트의 로컬 clone (여기에 sdd/ 를 복사해서 commit 한다)
 #   DOCS_REMOTE        (예: ssh://gerrit.internal:29418/camera/hal-docs)
+#   MANUAL_PAGES       docs 저장소에서 사람이 관리해 덮어쓰면 안 되는 페이지 (기본: index.md constraints.md decisions.md)
 
 set -euo pipefail
 
@@ -33,8 +34,19 @@ uv run sdd run --base "$BASE"
 # 이 저장소(파이프라인 코드)의 HEAD 를 그대로 push 하지 않는다. docs 프로젝트에는 문서만 들어간다.
 # Change-Id 는 docs clone 에 설치된 commit-msg 훅이 붙인다.
 if [[ -n "${DOCS_DIR:-}" && -n "${DOCS_REMOTE:-}" ]]; then
+  # 사람이 쓰는 페이지(sections.yaml 의 kind: manual 과 index.md)는 docs 저장소가 원본이다.
+  # 파이프라인 결과로 덮어쓰지 않도록 복사 전에 보관했다가 되돌린다.
+  MANUAL_PAGES="${MANUAL_PAGES:-index.md constraints.md decisions.md}"
+  KEEP="$(mktemp -d)"
+  for page in $MANUAL_PAGES; do
+    [[ -f "$DOCS_DIR/sdd/$page" ]] && cp "$DOCS_DIR/sdd/$page" "$KEEP/$page"
+  done
   rm -rf "$DOCS_DIR/sdd"
   cp -r sdd "$DOCS_DIR/sdd"
+  for page in $MANUAL_PAGES; do
+    [[ -f "$KEEP/$page" ]] && cp "$KEEP/$page" "$DOCS_DIR/sdd/$page"
+  done
+  rm -rf "$KEEP"
   cd "$DOCS_DIR"
   git add sdd
   if ! git diff --cached --quiet; then
