@@ -1,0 +1,858 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mini-hal SDD (예제)</title><style>
+:root { --fg:#1f2328; --muted:#59636e; --line:#d8dee4; --bg:#fff; --side:#f6f8fa; --ok:#1a7f37; --warn:#9a6700; --code:#f6f8fa; }
+* { box-sizing:border-box; }
+body { margin:0; font-family:-apple-system,"Segoe UI","Pretendard","Noto Sans KR",sans-serif; color:var(--fg); background:var(--bg); line-height:1.65; }
+nav { position:fixed; top:0; left:0; bottom:0; width:280px; overflow:auto; background:var(--side); border-right:1px solid var(--line); padding:20px 16px; font-size:14px; }
+nav h1 { font-size:15px; margin:0 0 14px; }
+nav .group { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; margin:14px 0 4px; }
+nav a { display:block; color:var(--fg); text-decoration:none; padding:4px 6px; border-radius:6px; }
+nav a:hover { background:#eaeef2; }
+nav a.sub { padding-left:18px; font-size:13px; }
+main { margin-left:280px; padding:32px 48px 80px; max-width:980px; }
+section.page { border-top:1px solid var(--line); padding-top:32px; margin-top:32px; }
+section.page:first-child { border-top:0; margin-top:0; padding-top:0; }
+h1 { font-size:28px; margin:0 0 6px; } h2 { font-size:20px; margin:28px 0 10px; border-bottom:1px solid var(--line); padding-bottom:4px; }
+.meta { color:var(--muted); font-size:13px; margin-bottom:16px; }
+.badge { display:inline-block; font-size:12px; padding:1px 8px; border-radius:10px; border:1px solid; margin-right:6px; }
+.badge.ok { color:var(--ok); border-color:var(--ok); } .badge.needs-review { color:var(--warn); border-color:var(--warn); }
+table { border-collapse:collapse; width:100%; margin:12px 0; font-size:14px; }
+th, td { border:1px solid var(--line); padding:6px 10px; text-align:left; vertical-align:top; }
+th { background:var(--side); }
+code { background:var(--code); padding:1px 5px; border-radius:4px; font-size:.92em; }
+pre { background:var(--code); padding:12px; overflow:auto; border-radius:6px; }
+pre.mermaid { background:#fff; border:1px solid var(--line); text-align:center; }
+details { border:1px solid var(--line); border-radius:6px; padding:8px 12px; margin:16px 0; background:var(--side); }
+summary { cursor:pointer; font-weight:600; }
+p.lead { font-weight:600; font-size:16px; }
+@media (max-width: 860px) { nav { position:static; width:auto; border-right:0; border-bottom:1px solid var(--line); } main { margin:0; padding:16px; } }
+</style></head>
+<body><nav><h1>mini-hal SDD (예제)</h1><a href="#page-index">시작</a><div class="group">코드로 확인한 구조</div><a href="#page-overview">시스템 개요 <span class="badge ok">ok</span></a><a href="#page-components">컴포넌트 구조와 책임 <span class="badge ok">ok</span></a><a href="#page-scenarios-index">핵심 시나리오 <span class="badge ok">ok</span></a><div class="group">scenarios</div><a class="sub" href="#page-scenarios-close-device">디바이스 종료 (camera_device_close) <span class="badge ok">ok</span></a><a class="sub" href="#page-scenarios-configure-streams">스트림 구성 (configureStreams) <span class="badge ok">ok</span></a><a class="sub" href="#page-scenarios-flush">플러시 (flush) <span class="badge ok">ok</span></a><a class="sub" href="#page-scenarios-frame-processing">워커 스레드 프레임 처리 (onFrame) <span class="badge ok">ok</span></a><a class="sub" href="#page-scenarios-open-device">디바이스 오픈 (camera_device_open) <span class="badge ok">ok</span></a><a class="sub" href="#page-scenarios-process-capture-request">캡처 요청 처리 (processCaptureRequest) <span class="badge ok">ok</span></a><div class="group">코드로 확인한 구조</div><a href="#page-feature-flags">Feature flag 매트릭스 <span class="badge ok">ok</span></a><a href="#page-threading">스레드와 큐 모델 <span class="badge needs-review">needs-review</span></a></nav>
+<main><section class="page" id="page-index"><h1>Camera HAL SDD</h1><div class="meta"></div><p><strong>수정할 기능이 있으면 <a href="#page-overview">시스템 개요</a>의 패키지 표에서 시작하세요.</strong> 이 사이트는 <code>camera-hal-sdd</code> 파이프라인이 HAL 소스에서 생성한 설계 문서와, 사람이 기록한 설계 결정을 나눠서 담습니다.</p>
+<table>
+<thead>
+<tr>
+<th>지금 확인할 내용</th>
+<th>이동할 문서</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>수정할 패키지와 진입점을 찾습니다.</td>
+<td><a href="#page-overview">시스템 개요</a></td>
+</tr>
+<tr>
+<td>클래스의 책임과 상속 관계를 확인합니다.</td>
+<td><a href="#page-components">컴포넌트 구조와 책임</a></td>
+</tr>
+<tr>
+<td>특정 동작의 호출 순서를 따라갑니다.</td>
+<td><a href="#page-scenarios-index">핵심 시나리오</a></td>
+</tr>
+<tr>
+<td>동작이 어떤 <code>-D</code> 플래그 아래에 있는지 확인합니다.</td>
+<td><a href="#page-feature-flags">Feature flag 매트릭스</a></td>
+</tr>
+<tr>
+<td>스레드 경계를 넘는 코드를 고칩니다.</td>
+<td><a href="#page-threading">스레드와 큐 모델</a></td>
+</tr>
+<tr>
+<td>바꾸면 안 되는 규칙을 확인합니다.</td>
+<td><a href="constraints.md">변경 시 지켜야 할 제약</a></td>
+</tr>
+<tr>
+<td>왜 이렇게 만들었는지 확인합니다.</td>
+<td><a href="decisions.md">설계 결정 기록</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="page-index--문서를-읽을-때-구분할-것">문서를 읽을 때 구분할 것</h2>
+<p>"코드로 확인한 구조" 아래 문서는 compile DB(NDK-build 구성)를 기준으로 정적 분석한 사실만 담습니다. 기기에서 실행해 본 결과가 아닙니다. "사람이 기록한 설계" 아래 문서는 파이프라인이 덮어쓰지 않으며, 설계 결정과 기기 관찰을 사람이 씁니다.</p>
+<p>각 문서 끝의 "근거와 검토 정보"에서 근거 파일, 인용 검증 결과, 검토 상태를 확인할 수 있습니다.</p>
+<table>
+<thead>
+<tr>
+<th>frontmatter</th>
+<th>뜻</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>status: ok</code></td>
+<td>본문의 모든 <code>파일:줄</code> 인용이 사실 모델에서 확인되었습니다.</td>
+</tr>
+<tr>
+<td><code>status: needs-review</code></td>
+<td>인용 검증에 실패했거나, 정적 분석으로는 알 수 없는 절입니다. 내용을 그대로 믿지 마세요.</td>
+</tr>
+<tr>
+<td><code>facts_omitted</code></td>
+<td>모델 입력 예산 때문에 제외된 사실입니다. 그 부분은 문서에 없습니다.</td>
+</tr>
+</tbody>
+</table>
+<p>다음 단계: <a href="#page-overview">시스템 개요</a></p></section><section class="page" id="page-overview"><h1>시스템 개요</h1><div class="meta"><span class="badge ok">ok</span>generated_at: 2026-09-17 14:11:56+00:00 · agent: ollama/qwen3.5:4b</div><h1 id="page-overview--시스템-개요">시스템 개요</h1>
+<p class="lead"><strong>수정할 기능이 어느 패키지에 있는지 아래 표에서 먼저 찾으세요.</strong></p>
+<table>
+<thead>
+<tr>
+<th>지금 확인할 내용</th>
+<th>이동할 절</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>수정할 패키지를 찾습니다.</td>
+<td><a href="#page-overview--패키지별-역할">패키지별 역할</a></td>
+</tr>
+<tr>
+<td>프레임워크에서 HAL 로 들어오는 진입점을 찾습니다.</td>
+<td><a href="#page-overview--hal-진입점">HAL 진입점</a></td>
+</tr>
+<tr>
+<td>코드를 처음 읽습니다.</td>
+<td><a href="#page-overview--코드를-처음-읽는-순서">코드를 처음 읽는 순서</a></td>
+</tr>
+<tr>
+<td>클래스 단위 책임을 확인합니다.</td>
+<td><a href="#page-components">컴포넌트 구조와 책임</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="page-overview--패키지별-역할">패키지별 역할</h2>
+<table>
+<thead>
+<tr>
+<th>패키지</th>
+<th>클래스 수</th>
+<th>대표 클래스</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>device</code></td>
+<td>2</td>
+<td><code>halcam::RequestManager</code>, <code>halcam::CameraDevice</code></td>
+</tr>
+<tr>
+<td><code>hal3</code></td>
+<td>5</td>
+<td><code>camera3_stream</code>, <code>camera3_stream_configuration</code>, <code>camera3_capture_request</code>, <code>camera3_capture_result</code>, <code>camera3_callback_ops</code></td>
+</tr>
+<tr>
+<td><code>pipeline</code></td>
+<td>8</td>
+<td><code>halcam::Frame</code>, <code>halcam::Pipe</code>, <code>halcam::IspPipe</code>, <code>halcam::SatPipe</code>, <code>halcam::FrameFactory</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="page-overview--패키지-사이의-의존">패키지 사이의 의존</h2>
+<table>
+<thead>
+<tr>
+<th>방향</th>
+<th>관계 종류</th>
+<th>관계 수</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>device</code> → <code>pipeline</code></td>
+<td>association</td>
+<td>4</td>
+</tr>
+<tr>
+<td><code>device</code> → <code>hal3</code></td>
+<td>association</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+<h2 id="page-overview--hal-진입점">HAL 진입점</h2>
+<table>
+<thead>
+<tr>
+<th>함수</th>
+<th>위치</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>camera_device_close()</code></td>
+<td><code>module/CameraModule.cpp:26</code></td>
+<td>Closes and deletes a device returned by camera_device_open.</td>
+</tr>
+<tr>
+<td><code>camera_device_open()</code></td>
+<td><code>module/CameraModule.cpp:17</code></td>
+<td>Opens a camera device. The caller owns the returned device and must call camera_device_close.</td>
+</tr>
+<tr>
+<td><code>get_number_of_cameras()</code></td>
+<td><code>module/CameraModule.cpp:12</code></td>
+<td>Returns the number of cameras this HAL exposes.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="page-overview--코드를-처음-읽는-순서">코드를 처음 읽는 순서</h2>
+<ol>
+<li><code>device/CameraDevice.cpp</code> 에서 <code>submit()</code> 부분을 읽습니다.</li>
+<li><code>device/RequestManager.cpp</code> 에서 <code>selectFactory()</code> 부분을 읽습니다.</li>
+<li><code>pipeline/FrameFactory.cpp</code> 에서 <code>buildPipes()</code> 부분을 읽습니다.</li>
+</ol>
+<p>이 순서는 <code>캡처 요청 처리 (processCaptureRequest)</code> 시나리오의 호출 경로에서 만들었습니다. 자세한 흐름은 시나리오 문서 <a href="#page-scenarios-process-capture-request">캡처 요청 처리 (processCaptureRequest)</a> 에서 확인하세요.</p>
+<h2 id="page-overview--구조-설명">구조 설명</h2>
+<p>이 HAL 은 <code>device</code>, <code>hal3</code>, <code>pipeline</code> 패키지로 나뉘며, 프레임워크 진입점은 <code>camera_device_open()</code> 함수입니다 <code>module/CameraModule.cpp:17</code>. <code>device</code> 패키지는 카메라 장치 관리를 담당하고, <code>hal3</code>는 하드웨어 인터페이스를, <code>pipeline</code>은 이미지 처리 파이프라인을 구현합니다. 패키지 간 의존 관계는 <code>device</code>가 <code>pipeline</code>과 <code>hal3</code>를 각각 참조하며, 이는 4 개와 2 개의 association 관계로 나타납니다 <code>device/CameraDevice.h:10</code>, <code>device/CameraDevice.cpp:5</code>. 프레임워크는 <code>camera_device_open()</code> 를 호출하여 장치 객체를 얻고, 이후 <code>processCaptureRequest()</code> 를 통해 캡처 요청을 제출합니다 <code>device/CameraDevice.cpp:40</code>.</p>
+<p><code>CameraDevice</code> 는 프레임워크 스레드에서 호출되는 콜백을 등록하고, <code>initialize()</code> 함수를 통해 이를 설정합니다 <code>device/CameraDevice.cpp:9</code>. <code>configureStreams()</code> 함수는 스트림 세트를 유효성 검사한 후 요청 매니저를 초기화하며, 이는 <code>processCaptureRequest()</code> 가 실행되기 전 필수 단계입니다 <code>device/CameraDevice.cpp:27</code>. 프레임워크 스레드에서 <code>camera_device_open()</code> 이 반환한 장치 객체는 호출자가 소유하며, 해당 객체는 <code>close()</code> 를 통해 해제됩니다 <code>device/CameraDevice.cpp:54</code>.</p>
+<p><code>RequestManager</code> 는 캡처 요청이 제출된 후 결과 콜백이 호출될 때까지 비행 중인 프레임을 소유합니다. 프레임은 여기서 생성되어 <code>PipeThread</code> 에서 처리되며, 완료 시에는 <code>onFrameDone()</code> 을 통해 반환됩니다 <code>device/RequestManager.h:14</code>. <code>selectFactory()</code> 함수는 요청에 따라 미리보기 또는 캡처 경로를 선택하고, <code>submit()</code> 은 해당 팩토리를 사용하여 프레임을 생성하여 작업자에게 전달합니다 <code>device/RequestManager.cpp:15</code>, <code>device/RequestManager.cpp:23</code>. <code>PipeThread</code> 는 작업자 스레드로, 프레임 큐를 드레인하며 <code>enqueue()</code> 를 통해 프레임이 처리될 때까지 대기합니다 <code>pipeline/PipeThread.cpp:27</code>.</p>
+<p>프레임은 <code>FrameFactory</code> 에 의해 생성되어 파이프라인을 거쳐 처리되며, <code>createFrame()</code> 함수는 요청에 맞는 프레임을 만듭니다 <code>pipeline/FrameFactory.cpp:5</code>. <code>buildPipes()</code> 는 구체적인 팩토리가 어떤 파이프를 연결할지 결정하며, 이는 <code>PreviewFrameFactory</code> 나 <code>halcam::FrameFactory</code> 에서 수행됩니다 <code>pipeline/FrameFactory.cpp:25</code>, <code>pipeline/FrameFactory.cpp:35</code>. ISP 단계는 항상 존재하며, <code>IspPipe.process()</code> 는 이미지 신호 처리 단계를 수행합니다 <code>pipeline/Pipe.cpp:6</code>.</p>
+<p>캡처 경로는 ISP 를 거쳐 SAT(공간 정렬) 단계를 거치며, 이는 <code>-DUSE_SAT</code> 플래그가 설정된 경우에만 컴파일됩니다. <code>SatPipe.alignWithSecondary()</code> 함수는 두 카메라의 영상을 정렬하는 역할을 합니다 <code>pipeline/Pipe.cpp:20</code>. 프레임워크 스레드에서 <code>camera_device_close()</code> 를 호출하면 장치 객체가 삭제되고, 이는 <code>close()</code> 함수를 통해 수행됩니다 <code>module/CameraModule.cpp:26</code>, <code>device/CameraDevice.cpp:54</code>.</p>
+<p>프레임 처리 완료 후 결과는 <code>camera3_callback_ops</code> 의 <code>process_capture_result</code> 를 통해 프레임워크에 전달됩니다 <code>hal3/types.h:30</code>. <code>flush()</code> 함수는 큐에 대기 중인 프레임을 모두 버리고 비행 중인 프레임을 기다립니다 <code>device/CameraDevice.cpp:47</code>. 파이프라인은 <code>validateStreams()</code> 를 통해 스트림 구성을 검증하며, 이는 <code>configureStreams()</code> 에서 호출됩니다 <code>device/CameraDevice.cpp:14</code>.</p>
+<details class="note">
+<summary>근거와 검토 정보</summary>
+<ul>
+<li>근거 파일: <code>device/CameraDevice.cpp</code>, <code>device/CameraDevice.h</code>, <code>device/RequestManager.cpp</code>, <code>device/RequestManager.h</code>, <code>hal3/types.h</code>, <code>module/CameraModule.cpp</code>, <code>pipeline/Frame.h</code>, <code>pipeline/FrameFactory.cpp</code>, <code>pipeline/FrameFactory.h</code>, <code>pipeline/Pipe.cpp</code>, <code>pipeline/Pipe.h</code>, <code>pipeline/PipeThread.cpp</code>, <code>pipeline/PipeThread.h</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<p>다음 단계: <a href="#page-components">컴포넌트 구조와 책임</a></p></section><section class="page" id="page-components"><h1>컴포넌트 구조와 책임</h1><div class="meta"><span class="badge ok">ok</span>generated_at: 2026-09-17 14:12:16+00:00 · agent: ollama/qwen3.5:4b</div><h1 id="page-components--컴포넌트-구조와-책임">컴포넌트 구조와 책임</h1>
+<p class="lead"><strong>수정할 클래스가 속한 패키지의 절로 이동해 책임과 상속 관계부터 확인하세요.</strong></p>
+<table>
+<thead>
+<tr>
+<th>지금 확인할 내용</th>
+<th>이동할 절</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>device 패키지의 클래스를 수정합니다.</td>
+<td><a href="#page-components--device">device</a></td>
+</tr>
+<tr>
+<td>hal3 패키지의 클래스를 수정합니다.</td>
+<td><a href="#page-components--hal3">hal3</a></td>
+</tr>
+<tr>
+<td>pipeline 패키지의 클래스를 수정합니다.</td>
+<td><a href="#page-components--pipeline">pipeline</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="page-components--전체-구조도">전체 구조도</h2>
+<pre class="mermaid">classDiagram
+    class camera3_callback_ops {
+    }
+    class camera3_capture_request {
+    }
+    class camera3_capture_result {
+    }
+    class camera3_stream {
+    }
+    class camera3_stream_configuration {
+    }
+    class CameraDevice {
+        +CameraDevice()
+        +~CameraDevice()
+        +initialize()
+        +configureStreams()
+        +processCaptureRequest()
+        +flush()
+    }
+    class CaptureFrameFactory {
+        +createFrame()
+        +buildPipes()
+    }
+    class Frame {
+    }
+    class FrameFactory {
+        +~FrameFactory()
+        +createFrame()
+        +runPipes()
+        +buildPipes()
+    }
+    class IspPipe {
+        +IspPipe()
+        +process()
+    }
+    class Pipe {
+        +Pipe()
+        +~Pipe()
+        +process()
+        +name()
+    }
+    class PipeThread {
+        +PipeThread()
+        +~PipeThread()
+        +start()
+        +stop()
+        +enqueue()
+        +threadLoop()
+    }
+    class PreviewFrameFactory {
+        +buildPipes()
+    }
+    class RequestManager {
+        +RequestManager()
+        +~RequestManager()
+        +submit()
+        +drain()
+        +selectFactory()
+        +onFrame()
+    }
+    class SatPipe {
+        +SatPipe()
+        +process()
+        +alignWithSecondary()
+    }
+    Pipe &lt;|-- IspPipe
+    Pipe &lt;|-- SatPipe
+    FrameFactory &lt;|-- PreviewFrameFactory
+    FrameFactory &lt;|-- CaptureFrameFactory
+    camera3_stream_configuration --&gt; camera3_stream
+    FrameFactory --&gt; Pipe
+    PipeThread --&gt; Frame
+    RequestManager --&gt; camera3_callback_ops
+    RequestManager --&gt; PreviewFrameFactory
+    RequestManager --&gt; CaptureFrameFactory
+    RequestManager --&gt; PipeThread
+    RequestManager --&gt; Frame
+    CameraDevice --&gt; camera3_callback_ops
+    CameraDevice --&gt; RequestManager</pre>
+<h2 id="page-components--device">device</h2>
+<table>
+<thead>
+<tr>
+<th>클래스</th>
+<th>선언 위치</th>
+<th>상속</th>
+<th>책임 (주석)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>halcam::RequestManager</code></td>
+<td><code>device/RequestManager.h:14</code></td>
+<td>–</td>
+<td>Owns in-flight frames between processCaptureRequest and the result callback. Frames are created here, processed on PipeThread, and released in onFrameDone.</td>
+</tr>
+<tr>
+<td><code>halcam::CameraDevice</code></td>
+<td><code>device/CameraDevice.h:10</code></td>
+<td>–</td>
+<td>HAL3 device object. One instance per opened camera id. Framework calls arrive on the framework thread; results are sent from PipeThread.</td>
+</tr>
+</tbody>
+</table>
+<p><code>halcam::CameraDevice</code> 는 하나의 카메라 ID 당 인스턴스를 가지며, 프레임워크 스레드에서 들어오는 요청을 처리하고 파이프 스레드에서 결과를 반환합니다 <code>device/CameraDevice.h:10</code>. 이 클래스는 초기화 시 프레임워크 콜백을 등록해야 하며, 스트림 설정 유효성 검사 후 요청 매니저를 재설정합니다 <code>device/CameraDevice.cpp:9</code>, <code>device/CameraDevice.cpp:27</code>. <code>processCaptureRequest</code> 는 프레임을 큐에 넣은 뒤 완료 대기 없이 즉시 반환하며, <code>flush</code> 는 큐에서 버린 프레임과 진행 중인 프레임을 모두 기다립니다 <code>device/CameraDevice.cpp:40</code>, <code>device/CameraDevice.cpp:47</code>.</p>
+<p><code>halcam::RequestManager</code> 는 프로세스 캡처 요청부터 결과 콜백까지의 진행 중인 프레임에 대한 소유권을 가집니다 <code>device/RequestManager.h:14</code>. 프레임은 여기서 생성되어 파이프 스레드에서 처리된 후, <code>onFrameDone</code> 에서 해제됩니다 <code>device/RequestManager.cpp:5</code>, <code>device/RequestManager.cpp:37</code>, <code>device/RequestManager.cpp:53</code>. <code>submit</code> 은 요청 팩토리를 선택하고 프레임을 작업자에게 넘기며, <code>drain</code> 은 모든 진행 중인 프레임이 반환될 때까지 블로킹합니다 <code>device/RequestManager.cpp:23</code>, <code>device/RequestManager.cpp:58</code>.</p>
+<p>프레임 소유권은 <code>halcam::CameraDevice</code> 의 요청 처리 흐름과 <code>halcam::RequestManager</code> 의 작업자 사이에서 이동하며, 프레임 생성 및 해제 시점은 명확히 정의되어 있습니다. <code>processCaptureRequest</code> 가 완료 대기 없이 반환하는 동작은 프레임이 큐에 도착했을 때이며, 이는 결과 콜백 발생 전의 중간 상태를 의미합니다 <code>device/CameraDevice.cpp:40</code>.</p>
+<p>다음 절인 "프레임 처리 흐름과 타이밍"을 확인하여 요청 제출 후 완료까지의 정확한 시간대와 스레드 소유권을 추가로 검증해야 합니다.</p>
+<details class="note">
+<summary>근거와 검토 정보: device</summary>
+<ul>
+<li>근거 파일: <code>device/CameraDevice.cpp</code>, <code>device/CameraDevice.h</code>, <code>device/RequestManager.cpp</code>, <code>device/RequestManager.h</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<h2 id="page-components--hal3">hal3</h2>
+<table>
+<thead>
+<tr>
+<th>클래스</th>
+<th>선언 위치</th>
+<th>상속</th>
+<th>책임 (주석)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>camera3_stream</code></td>
+<td><code>hal3/types.h:5</code></td>
+<td>–</td>
+<td>확인 필요</td>
+</tr>
+<tr>
+<td><code>camera3_stream_configuration</code></td>
+<td><code>hal3/types.h:12</code></td>
+<td>–</td>
+<td>확인 필요</td>
+</tr>
+<tr>
+<td><code>camera3_capture_request</code></td>
+<td><code>hal3/types.h:18</code></td>
+<td>–</td>
+<td>확인 필요</td>
+</tr>
+<tr>
+<td><code>camera3_capture_result</code></td>
+<td><code>hal3/types.h:24</code></td>
+<td>–</td>
+<td>확인 필요</td>
+</tr>
+<tr>
+<td><code>camera3_callback_ops</code></td>
+<td><code>hal3/types.h:30</code></td>
+<td>–</td>
+<td>Framework callback table. HAL calls process_capture_result on completion.</td>
+</tr>
+</tbody>
+</table>
+<p><code>camera3_stream</code> 은 프레임워크가 호출하는 <code>process_capture_result</code> 를 처리하기 위해 <code>camera3_callback_ops</code> 를 통해 콜백을 관리합니다 <code>hal3/types.h:5</code>. <code>camera3_stream_configuration</code> 은 스트림의 초기 파라미터를 정의하며, 이는 캡처 요청 생성 시 참조됩니다 <code>hal3/types.h:12</code>. <code>camera3_capture_request</code> 는 실제 캡처 작업이 시작될 때 프레임워크에 의해 생성되며, 해당 클래스는 버퍼와 요청 정보를 포함합니다 <code>hal3/types.h:18</code>. <code>camera3_capture_result</code> 는 캡처가 완료된 후 결과 데이터를 전달하는 역할을 하며, 이는 <code>camera3_callback_ops</code> 의 프로세스를 통해 호출됩니다 <code>hal3/types.h:24</code>. 프레임워크는 <code>camera3_stream</code> 이 처리할 결과를 생성하고, 해당 클래스는 요청을 제출한 뒤 결과를 처리하여 콜백을 실행합니다. 버퍼와 요청의 소유권 및 해제 시점은 현재 문서에는 명시되어 있지 않아 확인이 필요합니다.</p>
+<details class="note">
+<summary>근거와 검토 정보: hal3</summary>
+<ul>
+<li>근거 파일: <code>hal3/types.h</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<h2 id="page-components--pipeline">pipeline</h2>
+<table>
+<thead>
+<tr>
+<th>클래스</th>
+<th>선언 위치</th>
+<th>상속</th>
+<th>책임 (주석)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>halcam::Frame</code></td>
+<td><code>pipeline/Frame.h:8</code></td>
+<td>–</td>
+<td>One capture in flight. Created by a FrameFactory, consumed by pipes, released by RequestManager.</td>
+</tr>
+<tr>
+<td><code>halcam::Pipe</code></td>
+<td><code>pipeline/Pipe.h:12</code></td>
+<td>–</td>
+<td>One processing stage. Concrete pipes override process(). Ownership of the frame stays with the caller; a pipe never deletes a frame.</td>
+</tr>
+<tr>
+<td><code>halcam::IspPipe</code></td>
+<td><code>pipeline/Pipe.h:25</code></td>
+<td><code>halcam::Pipe</code></td>
+<td>Image signal processor stage. Always present.</td>
+</tr>
+<tr>
+<td><code>halcam::SatPipe</code></td>
+<td><code>pipeline/Pipe.h:33</code></td>
+<td><code>halcam::Pipe</code></td>
+<td>Spatial alignment transform stage for dual-camera fusion. Compiled only with -DUSE_SAT.</td>
+</tr>
+<tr>
+<td><code>halcam::FrameFactory</code></td>
+<td><code>pipeline/FrameFactory.h:12</code></td>
+<td>–</td>
+<td>Builds a Frame for a capture request and owns the pipe chain that will process it. Concrete factories decide which pipes are attached (preview vs. still capture).</td>
+</tr>
+<tr>
+<td><code>halcam::PreviewFrameFactory</code></td>
+<td><code>pipeline/FrameFactory.h:28</code></td>
+<td><code>halcam::FrameFactory</code></td>
+<td>Preview path: ISP only, low latency.</td>
+</tr>
+<tr>
+<td><code>halcam::CaptureFrameFactory</code></td>
+<td><code>pipeline/FrameFactory.h:34</code></td>
+<td><code>halcam::FrameFactory</code></td>
+<td>Still capture path: ISP followed by SAT when the build enables it.</td>
+</tr>
+<tr>
+<td><code>halcam::PipeThread</code></td>
+<td><code>pipeline/PipeThread.h:14</code></td>
+<td>–</td>
+<td>Worker thread that drains a frame queue. One PipeThread per RequestManager. enqueue() may be called from the framework thread; the handler runs on the worker thread.</td>
+</tr>
+</tbody>
+</table>
+<p><code>halcam::FrameFactory</code> 는 캡처 요청을 받아 <code>halcam::Frame</code> 을 생성하고, 해당 프레임이 처리될 파이프 체인을 소유합니다 <code>pipeline/FrameFactory.h:12</code>. 구체적인 팩토리 클래스는 <code>buildPipes()</code> 를 통해 preview 경로에 ISP 만 추가하거나 still 캡처 경로는 SAT 를 포함하는지 결정합니다 <code>pipeline/FrameFactory.cpp:35</code>. 생성된 프레임은 <code>halcam::Pipe</code> 가 순차적으로 소비하며, 각 파이프는 호출자가 소유권을 유지하도록 프레임 삭제 없이 처리만 수행합니다 <code>pipeline/Pipe.h:12</code>.</p>
+<p><code>halcam::PipeThread</code> 는 하나의 <code>RequestManager</code> 당 하나씩 존재하며, 프레임 큐를 드레인하는 작업 스레드 역할을 합니다 <code>pipeline/PipeThread.h:14</code>. 이 스레드는 프레임이 제출되면 <code>enqueue()</code> 를 통해 처리 요청을 받지만, 실제 핸들러 실행은 worker 스레드 내에서 이루어집니다 <code>pipeline/PipeThread.cpp:27</code>. <code>start()</code> 는 한 번만 호출해도 안전하며, <code>stop()</code> 은 남은 프레임을 드레인하고 스레드를 종료합니다 <code>pipeline/PipeThread.cpp:10</code>.</p>
+<p>버퍼와 파이프 체인의 소유권 흐름은 팩토리가 생성한 프레임이 파이프를 통해 처리될 때까지 호출자가 유지합니다 <code>pipeline/FrameFactory.h:12</code>. 파이프는 프레임의 소유권을 반환하지 않으며, 최종적으로 <code>RequestManager</code> 가 프레임을 해제합니다 <code>pipeline/Pipe.h:12</code>. 작업 스레드는 프레임 큐가 비어질 때까지 대기하며, 프레임 제출 시에는 즉시 처리를 시작하지 않고 큐에 쌓습니다 <code>pipeline/PipeThread.cpp:35</code>.</p>
+<p>다음 절에서는 프레임 생성과 처리의 구체적인 타이밍 및 동기화 문제를 다룹니다.</p>
+<details class="note">
+<summary>근거와 검토 정보: pipeline</summary>
+<ul>
+<li>근거 파일: <code>pipeline/Frame.h</code>, <code>pipeline/FrameFactory.cpp</code>, <code>pipeline/FrameFactory.h</code>, <code>pipeline/Pipe.cpp</code>, <code>pipeline/Pipe.h</code>, <code>pipeline/PipeThread.cpp</code>, <code>pipeline/PipeThread.h</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<details class="note">
+<summary>근거와 검토 정보</summary>
+<ul>
+<li>근거 파일: <code>device/CameraDevice.cpp</code>, <code>device/CameraDevice.h</code>, <code>device/RequestManager.cpp</code>, <code>device/RequestManager.h</code>, <code>hal3/types.h</code>, <code>pipeline/Frame.h</code>, <code>pipeline/FrameFactory.cpp</code>, <code>pipeline/FrameFactory.h</code>, <code>pipeline/Pipe.cpp</code>, <code>pipeline/Pipe.h</code>, <code>pipeline/PipeThread.cpp</code>, <code>pipeline/PipeThread.h</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<p>다음 단계: <a href="#page-scenarios-index">핵심 시나리오 시퀀스</a></p></section><section class="page" id="page-scenarios-index"><h1>핵심 시나리오 시퀀스</h1><div class="meta"><span class="badge ok">ok</span>generated_at: 2026-09-17 14:15:29+00:00 · agent: ollama/qwen3.5:4b</div><h1 id="page-scenarios-index--핵심-시나리오-시퀀스">핵심 시나리오 시퀀스</h1>
+<p class="lead"><strong>추적하려는 동작의 시나리오를 표에서 고르세요. 각 시나리오는 진입 함수부터 호출 순서를 번호로 보여 줍니다.</strong></p>
+<table>
+<thead>
+<tr>
+<th>지금 확인할 내용</th>
+<th>이동할 절</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>디바이스 종료 (camera_device_close) 흐름을 추적합니다.</td>
+<td><a href="#page-scenarios-close-device">디바이스 종료 (camera_device_close)</a></td>
+</tr>
+<tr>
+<td>스트림 구성 (configureStreams) 흐름을 추적합니다.</td>
+<td><a href="#page-scenarios-configure-streams">스트림 구성 (configureStreams)</a></td>
+</tr>
+<tr>
+<td>플러시 (flush) 흐름을 추적합니다.</td>
+<td><a href="#page-scenarios-flush">플러시 (flush)</a></td>
+</tr>
+<tr>
+<td>워커 스레드 프레임 처리 (onFrame) 흐름을 추적합니다.</td>
+<td><a href="#page-scenarios-frame-processing">워커 스레드 프레임 처리 (onFrame)</a></td>
+</tr>
+<tr>
+<td>디바이스 오픈 (camera_device_open) 흐름을 추적합니다.</td>
+<td><a href="#page-scenarios-open-device">디바이스 오픈 (camera_device_open)</a></td>
+</tr>
+<tr>
+<td>캡처 요청 처리 (processCaptureRequest) 흐름을 추적합니다.</td>
+<td><a href="#page-scenarios-process-capture-request">캡처 요청 처리 (processCaptureRequest)</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="page-scenarios-index--시나리오-목록">시나리오 목록</h2>
+<table>
+<thead>
+<tr>
+<th>시나리오</th>
+<th>진입점</th>
+<th>단계 수</th>
+<th>미해결 호출</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="#page-scenarios-close-device">디바이스 종료 (camera_device_close)</a></td>
+<td><code>camera_device_close(halcam::CameraDevice *)</code></td>
+<td>2</td>
+<td>0</td>
+</tr>
+<tr>
+<td><a href="#page-scenarios-configure-streams">스트림 구성 (configureStreams)</a></td>
+<td><code>halcam::CameraDevice::configureStreams(camera3_stream_configuration_t *)</code></td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td><a href="#page-scenarios-flush">플러시 (flush)</a></td>
+<td><code>halcam::CameraDevice::flush()</code></td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td><a href="#page-scenarios-frame-processing">워커 스레드 프레임 처리 (onFrame)</a></td>
+<td><code>halcam::RequestManager::onFrame(halcam::Frame &amp;)</code></td>
+<td>7</td>
+<td>1</td>
+</tr>
+<tr>
+<td><a href="#page-scenarios-open-device">디바이스 오픈 (camera_device_open)</a></td>
+<td><code>camera_device_open(int, halcam::CameraDevice **)</code></td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td><a href="#page-scenarios-process-capture-request">캡처 요청 처리 (processCaptureRequest)</a></td>
+<td><code>halcam::CameraDevice::processCaptureRequest(camera3_capture_request_t *)</code></td>
+<td>10</td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<details class="note">
+<summary>근거와 검토 정보</summary>
+<ul>
+<li>근거 파일: (없음)</li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<p>다음 단계: <a href="#page-feature-flags">Feature flag 매트릭스</a></p></section><section class="page" id="page-scenarios-close-device"><h1>디바이스 종료 (camera_device_close)</h1><div class="meta"><span class="badge ok">ok</span>generated_at: 2026-09-17 14:15:00+00:00 · agent: ollama/qwen3.5:4b</div><h1 id="page-scenarios-close-device--디바이스-종료-camera_device_close">디바이스 종료 (camera_device_close)</h1>
+<p class="lead"><strong><code>camera_device_close(halcam::CameraDevice *)</code> 에서 시작하는 호출 순서를 아래 번호대로 따라가세요.</strong></p>
+<pre class="mermaid">sequenceDiagram
+    participant CameraModule
+    participant CameraDevice
+    participant RequestManager
+    CameraModule-&gt;&gt;CameraDevice: close()
+    CameraDevice-&gt;&gt;RequestManager: drain()</pre>
+<h2 id="page-scenarios-close-device--호출-순서">호출 순서</h2>
+<ol>
+<li><code>CameraModule</code> 가 <code>CameraDevice::close()</code> 를 호출합니다. <code>module/CameraModule.cpp:30</code></li>
+<li><code>CameraDevice</code> 가 <code>RequestManager::drain()</code> 를 호출합니다. <code>device/CameraDevice.cpp:56</code></li>
+</ol>
+<h2 id="page-scenarios-close-device--이-흐름에서-확인할-것">이 흐름에서 확인할 것</h2>
+<p><code>CameraModule</code> 은 <code>CameraDevice::close()</code> 를 호출하여 디바이스 종료 프로세스를 시작합니다 <code>module/CameraModule.cpp:30</code>. 이 호출은 요청 관리자가 모든 대기 중인 요청을 처리하도록 <code>RequestManager::drain()</code> 을 실행하게 합니다 <code>device/CameraDevice.cpp:56</code>. 정적 추적이 여기서부터 끊기는지, 아니면 더 깊은 내부 메커니즘까지 추적 가능한지는 현재 사실 목록에서 확인되지 않았습니다.</p>
+<details class="note">
+<summary>근거와 검토 정보</summary>
+<ul>
+<li>근거 파일: <code>device/CameraDevice.cpp</code>, <code>module/CameraModule.cpp</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<p>다음 단계: <a href="#page-scenarios-configure-streams">스트림 구성 (configureStreams)</a></p></section><section class="page" id="page-scenarios-configure-streams"><h1>스트림 구성 (configureStreams)</h1><div class="meta"><span class="badge ok">ok</span>generated_at: 2026-09-17 14:15:03+00:00 · agent: ollama/qwen3.5:4b</div><h1 id="page-scenarios-configure-streams--스트림-구성-configurestreams">스트림 구성 (configureStreams)</h1>
+<p class="lead"><strong><code>halcam::CameraDevice::configureStreams(camera3_stream_configuration_t *)</code> 에서 시작하는 호출 순서를 아래 번호대로 따라가세요.</strong></p>
+<pre class="mermaid">sequenceDiagram
+    participant CameraDevice
+    CameraDevice-&gt;&gt;CameraDevice: validateStreams()</pre>
+<h2 id="page-scenarios-configure-streams--호출-순서">호출 순서</h2>
+<ol>
+<li><code>CameraDevice</code> 가 <code>CameraDevice::validateStreams()</code> 를 호출합니다. <code>device/CameraDevice.cpp:31</code></li>
+</ol>
+<h2 id="page-scenarios-configure-streams--이-흐름에서-확인할-것">이 흐름에서 확인할 것</h2>
+<p><code>CameraDevice::configureStreams()</code> 는 요청이 들어온 직후 <code>validateStreams()</code> 를 호출하여 스트림 구성을 검증합니다 <code>device/CameraDevice.cpp:31</code>. 이 단계에서 유효하지 않은 파라미터가 발견되면 함수는 즉시 종료하며 이후 컴포넌트를 거치지 않습니다. 검증이 통과된 경우에만 다음 단계로 진행되어 실제 하드웨어 설정이 시작됩니다.</p>
+<details class="note">
+<summary>근거와 검토 정보</summary>
+<ul>
+<li>근거 파일: <code>device/CameraDevice.cpp</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<p>다음 단계: <a href="#page-scenarios-flush">플러시 (flush)</a></p></section><section class="page" id="page-scenarios-flush"><h1>플러시 (flush)</h1><div class="meta"><span class="badge ok">ok</span>generated_at: 2026-09-17 14:15:07+00:00 · agent: ollama/qwen3.5:4b</div><h1 id="page-scenarios-flush--플러시-flush">플러시 (flush)</h1>
+<p class="lead"><strong><code>halcam::CameraDevice::flush()</code> 에서 시작하는 호출 순서를 아래 번호대로 따라가세요.</strong></p>
+<pre class="mermaid">sequenceDiagram
+    participant CameraDevice
+    participant RequestManager
+    CameraDevice-&gt;&gt;RequestManager: drain()</pre>
+<h2 id="page-scenarios-flush--호출-순서">호출 순서</h2>
+<ol>
+<li><code>CameraDevice</code> 가 <code>RequestManager::drain()</code> 를 호출합니다. <code>device/CameraDevice.cpp:49</code></li>
+</ol>
+<h2 id="page-scenarios-flush--이-흐름에서-확인할-것">이 흐름에서 확인할 것</h2>
+<p><code>halcam::CameraDevice::flush()</code> 호출은 <code>RequestManager::drain()</code> 를 거쳐 시작됩니다 <code>device/CameraDevice.cpp:49</code>. 이 단계에서 <code>CameraDevice</code> 는 요청 관리자가 모든 대기 중인 요청을 처리하도록 지시합니다. <code>RequestManager::drain()</code> 내부의 구체적인 실행 흐름이나 어떤 컴포넌트가 추가로 호출되는지는 현재 사실 목록에 명시되어 있지 않습니다. 따라서 해당 함수의 내부 동작과 분기 조건은 실제 소스 코드 검토를 통해 확인해야 합니다.</p>
+<details class="note">
+<summary>근거와 검토 정보</summary>
+<ul>
+<li>근거 파일: <code>device/CameraDevice.cpp</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<p>다음 단계: <a href="#page-scenarios-frame-processing">워커 스레드 프레임 처리 (onFrame)</a></p></section><section class="page" id="page-scenarios-frame-processing"><h1>워커 스레드 프레임 처리 (onFrame)</h1><div class="meta"><span class="badge ok">ok</span>generated_at: 2026-09-17 14:15:19+00:00 · agent: ollama/qwen3.5:4b</div><h1 id="page-scenarios-frame-processing--워커-스레드-프레임-처리-onframe">워커 스레드 프레임 처리 (onFrame)</h1>
+<p class="lead"><strong><code>halcam::RequestManager::onFrame(halcam::Frame &amp;)</code> 에서 시작하는 호출 순서를 아래 번호대로 따라가세요.</strong></p>
+<pre class="mermaid">sequenceDiagram
+    participant RequestManager
+    participant FrameFactory
+    participant IspPipe
+    participant SatPipe
+    participant camera3_callback_ops
+    RequestManager-&gt;&gt;FrameFactory: runPipes()
+    FrameFactory--&gt;&gt;IspPipe: process() [virtual 후보]
+    FrameFactory--&gt;&gt;SatPipe: process() [virtual 후보]
+    SatPipe-&gt;&gt;SatPipe: alignWithSecondary()
+    RequestManager-&gt;&gt;RequestManager: sendResult()
+    RequestManager--&gt;&gt;camera3_callback_ops: process_capture_result() [함수 포인터, 정적 추적 불가]
+    RequestManager-&gt;&gt;RequestManager: onFrameDone()</pre>
+<h2 id="page-scenarios-frame-processing--호출-순서">호출 순서</h2>
+<ol>
+<li><code>RequestManager</code> 가 <code>FrameFactory::runPipes()</code> 를 호출합니다. <code>device/RequestManager.cpp:40</code></li>
+<li><code>FrameFactory</code> 가 <code>IspPipe::process()</code> 를 호출합니다. (virtual 후보) <code>pipeline/FrameFactory.cpp:17</code></li>
+<li><code>FrameFactory</code> 가 <code>SatPipe::process()</code> 를 호출합니다. (virtual 후보) <code>pipeline/FrameFactory.cpp:17</code></li>
+<li><code>SatPipe</code> 가 <code>SatPipe::alignWithSecondary()</code> 를 호출합니다. <code>pipeline/Pipe.cpp:17</code></li>
+<li><code>RequestManager</code> 가 <code>RequestManager::sendResult()</code> 를 호출합니다. <code>device/RequestManager.cpp:42</code></li>
+<li><code>RequestManager</code> 가 <code>camera3_callback_ops::process_capture_result()</code> 를 호출합니다. (함수 포인터, 정적 추적 불가) <code>device/RequestManager.cpp:50</code></li>
+<li><code>RequestManager</code> 가 <code>RequestManager::onFrameDone()</code> 를 호출합니다. <code>device/RequestManager.cpp:44</code></li>
+</ol>
+<h2 id="page-scenarios-frame-processing--이-흐름에서-확인할-것">이 흐름에서 확인할 것</h2>
+<p>프레임 처리 요청이 들어온 후 결과 콜백까지의 호출 경로는 <code>RequestManager</code> 를 중심으로 파이프라인과 외부 작업자가 교차하며 진행됩니다. 요청은 먼저 <code>RequestManager::onFrame()</code> 에서 시작하여 <code>FrameFactory</code> 를 거쳐 파이프라인 처리가 완료되면 다시 <code>RequestManager</code> 로 돌아옵니다. 이 과정에서 특정 함수는 가상 함수로 구현되어 있어 정적 분석이 불가능하며, 결과 처리는 외부 포인터를 통해 전달됩니다.</p>
+<p><code>RequestManager::onFrame()</code> 은 프레임 데이터를 받자마자 <code>FrameFactory::runPipes()</code> 를 호출하여 처리 시작합니다 <code>device/RequestManager.cpp:40</code>. <code>FrameFactory</code> 는 이 단계에서 가상 함수인 <code>IspPipe::process()</code> 와 <code>SatPipe::process()</code> 를 호출하여 구체적인 파이프라인을 실행하도록 지시합니다 <code>pipeline/FrameFactory.cpp:17</code>.</p>
+<p><code>SatPipe</code> 가 처리를 수행할 때 <code>SatPipe::alignWithSecondary()</code> 를 호출하여 보조 데이터와 정렬 작업을 진행합니다 <code>pipeline/Pipe.cpp:17</code>. 파이프라인 작업이 완료되면 <code>RequestManager</code> 는 다시 <code>sendResult()</code> 를 호출하여 결과를 전달하고, 이어지는 <code>camera3_callback_ops::process_capture_result()</code> 함수는 외부 포인터를 통해 처리됩니다 <code>device/RequestManager.cpp:42</code>, <code>device/RequestManager.cpp:50</code>.</p>
+<p>결과 처리가 끝난 후 <code>RequestManager</code> 는 최종적으로 <code>onFrameDone()</code> 을 호출하여 전체 작업이 종료됨을 알립니다 <code>device/RequestManager.cpp:44</code>. <code>camera3_callback_ops::process_capture_result()</code> 함수는 정적 추적 대상이 아니므로 실제 실행 흐름은 런타임에 결정됩니다.</p>
+<p>다음으로 프레임 처리 완료 후의 상태 관리나 메모리 반환 절차를 확인합니다.</p>
+<p>확인 필요: 가상 함수나 함수 포인터 때문에 정적으로 끊긴 호출이 1 개 있습니다. 끊긴 지점 이후는 코드를 직접 따라가야 합니다.</p>
+<details class="note">
+<summary>근거와 검토 정보</summary>
+<ul>
+<li>근거 파일: <code>device/RequestManager.cpp</code>, <code>pipeline/FrameFactory.cpp</code>, <code>pipeline/Pipe.cpp</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<p>다음 단계: <a href="#page-scenarios-open-device">디바이스 오픈 (camera_device_open)</a></p></section><section class="page" id="page-scenarios-open-device"><h1>디바이스 오픈 (camera_device_open)</h1><div class="meta"><span class="badge ok">ok</span>generated_at: 2026-09-17 14:15:23+00:00 · agent: ollama/qwen3.5:4b</div><h1 id="page-scenarios-open-device--디바이스-오픈-camera_device_open">디바이스 오픈 (camera_device_open)</h1>
+<p class="lead"><strong><code>camera_device_open(int, halcam::CameraDevice **)</code> 에서 시작하는 호출 순서를 아래 번호대로 따라가세요.</strong></p>
+<pre class="mermaid">sequenceDiagram
+    participant CameraModule
+    participant CameraDevice
+    CameraModule-&gt;&gt;CameraDevice: CameraDevice()</pre>
+<h2 id="page-scenarios-open-device--호출-순서">호출 순서</h2>
+<ol>
+<li><code>CameraModule</code> 가 <code>CameraDevice::CameraDevice()</code> 를 호출합니다. <code>module/CameraModule.cpp:21</code></li>
+</ol>
+<h2 id="page-scenarios-open-device--이-흐름에서-확인할-것">이 흐름에서 확인할 것</h2>
+<p><code>camera_device_open()</code> 호출은 <code>CameraModule</code> 이 생성자를 통해 디바이스 객체를 초기화하는 방식으로 시작됩니다 <code>module/CameraModule.cpp:21</code>. 초기화 과정에서 <code>CameraDevice::CameraDevice()</code> 는 내부적으로 필요한 리소스를 할당하고 상태 플래그를 설정합니다. 이후 <code>CameraDevice</code> 의 메서드 체인이 호출되어 하드웨어 드라이버와 통신 프로토콜을 연결합니다. 이 과정에서 특정 조건에 따라 분기가 발생하며, 일부 단계는 정적 분석 도구에서 추적되지 않는 동적 동작을 포함할 수 있습니다. 정확한 분기 지점과 숨겨진 호출 경로는 실행 로그를 통해 확인해야 합니다.</p>
+<details class="note">
+<summary>근거와 검토 정보</summary>
+<ul>
+<li>근거 파일: <code>module/CameraModule.cpp</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<p>다음 단계: <a href="#page-scenarios-process-capture-request">캡처 요청 처리 (processCaptureRequest)</a></p></section><section class="page" id="page-scenarios-process-capture-request"><h1>캡처 요청 처리 (processCaptureRequest)</h1><div class="meta"><span class="badge ok">ok</span>generated_at: 2026-09-17 14:15:29+00:00 · agent: ollama/qwen3.5:4b</div><h1 id="page-scenarios-process-capture-request--캡처-요청-처리-processcapturerequest">캡처 요청 처리 (processCaptureRequest)</h1>
+<p class="lead"><strong><code>halcam::CameraDevice::processCaptureRequest(camera3_capture_request_t *)</code> 에서 시작하는 호출 순서를 아래 번호대로 따라가세요.</strong></p>
+<pre class="mermaid">sequenceDiagram
+    participant CameraDevice
+    participant RequestManager
+    participant FrameFactory
+    participant PreviewFrameFactory
+    participant CaptureFrameFactory
+    participant PipeThread
+    CameraDevice-&gt;&gt;RequestManager: submit()
+    RequestManager-&gt;&gt;RequestManager: selectFactory()
+    RequestManager--&gt;&gt;FrameFactory: createFrame() [virtual 후보]
+    FrameFactory--&gt;&gt;PreviewFrameFactory: buildPipes() [virtual 후보]
+    FrameFactory--&gt;&gt;CaptureFrameFactory: buildPipes() [virtual 후보]
+    RequestManager--&gt;&gt;CaptureFrameFactory: createFrame() [virtual 후보]
+    CaptureFrameFactory-&gt;&gt;FrameFactory: createFrame()
+    FrameFactory--&gt;&gt;PreviewFrameFactory: buildPipes() [virtual 후보]
+    FrameFactory--&gt;&gt;CaptureFrameFactory: buildPipes() [virtual 후보]
+    RequestManager-&gt;&gt;PipeThread: enqueue()</pre>
+<h2 id="page-scenarios-process-capture-request--호출-순서">호출 순서</h2>
+<ol>
+<li><code>CameraDevice</code> 가 <code>RequestManager::submit()</code> 를 호출합니다. <code>device/CameraDevice.cpp:44</code></li>
+<li><code>RequestManager</code> 가 <code>RequestManager::selectFactory()</code> 를 호출합니다. <code>device/RequestManager.cpp:24</code></li>
+<li><code>RequestManager</code> 가 <code>FrameFactory::createFrame()</code> 를 호출합니다. (virtual 후보) <code>device/RequestManager.cpp:25</code></li>
+<li><code>FrameFactory</code> 가 <code>PreviewFrameFactory::buildPipes()</code> 를 호출합니다. (virtual 후보) <code>pipeline/FrameFactory.cpp:7</code></li>
+<li><code>FrameFactory</code> 가 <code>CaptureFrameFactory::buildPipes()</code> 를 호출합니다. (virtual 후보) <code>pipeline/FrameFactory.cpp:7</code></li>
+<li><code>RequestManager</code> 가 <code>CaptureFrameFactory::createFrame()</code> 를 호출합니다. (virtual 후보) <code>device/RequestManager.cpp:25</code></li>
+<li><code>CaptureFrameFactory</code> 가 <code>FrameFactory::createFrame()</code> 를 호출합니다. <code>pipeline/FrameFactory.cpp:30</code></li>
+<li><code>FrameFactory</code> 가 <code>PreviewFrameFactory::buildPipes()</code> 를 호출합니다. (virtual 후보) <code>pipeline/FrameFactory.cpp:7</code></li>
+<li><code>FrameFactory</code> 가 <code>CaptureFrameFactory::buildPipes()</code> 를 호출합니다. (virtual 후보) <code>pipeline/FrameFactory.cpp:7</code></li>
+<li><code>RequestManager</code> 가 <code>PipeThread::enqueue()</code> 를 호출합니다. <code>device/RequestManager.cpp:31</code></li>
+</ol>
+<h2 id="page-scenarios-process-capture-request--이-흐름에서-확인할-것">이 흐름에서 확인할 것</h2>
+<p>캡처 요청 처리는 <code>CameraDevice</code> 에서 시작해 <code>PipeThread</code> 에게 큐를 채우는 순서로 진행됩니다. <code>CameraDevice::processCaptureRequest()</code> 가 호출되면 <code>RequestManager::submit()</code> 이 먼저 실행되어 요청이 제출됩니다 <code>device/CameraDevice.cpp:44</code>. 이어지는 단계에서 <code>RequestManager</code> 는 가상 함수 <code>selectFactory()</code> 를 통해 프레임 팩토리를 선택합니다 <code>device/RequestManager.cpp:24</code>. 선택된 팩토리는 <code>buildPipes()</code> 와 같은 가상 함수를 호출하여 파이프라인 구조를 생성하며, 이 과정에서 <code>PreviewFrameFactory</code> 와 <code>CaptureFrameFactory</code> 가 번갈아 호출됩니다 <code>pipeline/FrameFactory.cpp:7</code>. 최종적으로 <code>RequestManager</code> 는 생성된 프레임 객체를 <code>PipeThread::enqueue()</code> 로 전달하여 처리 대기열에 넣습니다 <code>device/RequestManager.cpp:31</code>.</p>
+<p>이 과정에서 가상 함수 (<code>virtual 후보</code>) 를 통한 다형성 호출이 반복되며, 특정 팩토리가 실제 인스턴스로 바뀔 수 있습니다. 각 단계의 실행 흐름은 호출자에서 호출받는 순서로 명확히 구분되지만, <code>buildPipes()</code> 내부의 구체적인 로직은 팩토리 구현에 따라 달라질 수 있습니다. 요청 처리가 완료되는지 확인하려면 <code>PipeThread::enqueue()</code> 의 성공 여부를 모니터링해야 합니다.</p>
+<details class="note">
+<summary>근거와 검토 정보</summary>
+<ul>
+<li>근거 파일: <code>device/CameraDevice.cpp</code>, <code>device/RequestManager.cpp</code>, <code>pipeline/FrameFactory.cpp</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<p>다음 단계: <a href="#page-scenarios-index">핵심 시나리오 목록</a></p></section><section class="page" id="page-feature-flags"><h1>Feature flag 매트릭스</h1><div class="meta"><span class="badge ok">ok</span>generated_at: 2026-09-17 14:12:49+00:00 · agent: ollama/qwen3.5:4b</div><h1 id="page-feature-flags--feature-flag-매트릭스">Feature flag 매트릭스</h1>
+<p class="lead"><strong>바꾸려는 동작이 어떤 -D 플래그 아래에 있는지 표에서 확인하세요. 이 표는 NDK-build 구성 기준입니다.</strong></p>
+<h2 id="page-feature-flags--플래그-표">플래그 표</h2>
+<p>이 표는 compile DB(NDK-build 구성)의 <code>-D</code> 목록과 소스의 <code>#if</code> 분기 위치를 그대로 옮긴 것입니다. LLM 을 거치지 않았습니다.</p>
+<table>
+<thead>
+<tr>
+<th>플래그</th>
+<th>값</th>
+<th>분기 위치 (최대 20)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MAX_PIPES</code></td>
+<td><code>8</code></td>
+<td>(소스에서 분기 없음)</td>
+</tr>
+<tr>
+<td><code>USE_DUAL_CAMERA</code></td>
+<td><code>0</code></td>
+<td><code>device/CameraDevice.cpp:18</code></td>
+</tr>
+<tr>
+<td><code>USE_SAT</code></td>
+<td><code>1</code></td>
+<td><code>pipeline/FrameFactory.cpp:37</code>, <code>pipeline/Pipe.cpp:12</code>, <code>pipeline/Pipe.h:31</code></td>
+</tr>
+</tbody>
+</table>
+<details class="note">
+<summary>근거와 검토 정보</summary>
+<ul>
+<li>근거 파일: <code>device/CameraDevice.cpp</code>, <code>pipeline/FrameFactory.cpp</code>, <code>pipeline/Pipe.cpp</code>, <code>pipeline/Pipe.h</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<p>다음 단계: <a href="#page-threading">스레드와 큐 모델</a></p></section><section class="page" id="page-threading"><h1>스레드와 큐 모델</h1><div class="meta"><span class="badge needs-review">needs-review</span>generated_at: 2026-09-17 14:12:55+00:00 · agent: ollama/qwen3.5:4b</div><h1 id="page-threading--스레드와-큐-모델">스레드와 큐 모델</h1>
+<p class="lead"><strong>콜백이 어느 스레드에서 실행되는지는 정적 분석으로 확인되지 않았습니다. 아래 표의 클래스를 수정하기 전에 실행 스레드를 직접 확인하세요.</strong></p>
+<table>
+<thead>
+<tr>
+<th>지금 확인할 내용</th>
+<th>이동할 절</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>관련 클래스 절을 확인합니다.</td>
+<td><a href="#page-threading--관련-클래스">관련 클래스</a></td>
+</tr>
+<tr>
+<td>구조 설명 절을 확인합니다.</td>
+<td><a href="#page-threading--구조-설명">구조 설명</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="page-threading--관련-클래스">관련 클래스</h2>
+<table>
+<thead>
+<tr>
+<th>클래스</th>
+<th>선언 위치</th>
+<th>상속</th>
+<th>책임 (주석)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>halcam::PipeThread</code></td>
+<td><code>pipeline/PipeThread.h:14</code></td>
+<td>–</td>
+<td>Worker thread that drains a frame queue. One PipeThread per RequestManager. enqueue() may be called from the framework thread; the handler runs on the worker thread.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="page-threading--구조-설명">구조 설명</h2>
+<p><code>halcam::PipeThread</code> 클래스는 각 <code>RequestManager</code> 에 한 개의 워커 스레드를 소유하며, 이 스레드는 프레임 큐를 드레인하는 역할을 수행합니다 <code>pipeline/PipeThread.h:14</code>. 프레임이 제출되는 호출은 프레임워크 스레드에서 이루어질 수 있으나, 실제 처리 로직은 <code>PipeThread</code> 의 워커 스레드 내부에서 실행됩니다 <code>pipeline/PipeThread.h:14</code>. <code>PipeThread</code> 의 생성자 <code>PipeThread()</code> 는 초기화 작업만 수행하고, <code>start()</code> 메서드를 호출하여 워커 스레드를 시작합니다 <code>pipeline/PipeThread.cpp:6</code>, <code>pipeline/PipeThread.cpp:10</code>. <code>stop()</code> 메서드는 카메라 장치의 닫힘 과정에서 호출되며, 남은 프레임을 드레인한 후 워커 스레드를 종료합니다 <code>pipeline/PipeThread.cpp:8</code>, <code>pipeline/PipeThread.cpp:17</code>. 프레임 처리를 위해 큐에 프레임을 추가하는 <code>enqueue()</code> 메서드는 반환 값이 false 일 때만 워커 스레드가 중지되었음을 의미하며, 이 호출은 프레임워크 스레드에서 발생할 수 있습니다 <code>pipeline/PipeThread.cpp:27</code>, <code>pipeline/PipeThread.cpp:10</code>.</p>
+<p>확인 필요: 이 절의 내용은 정적 분석 결과입니다. 콜백 실행 스레드와 종료 순서는 코드를 직접 실행해서 확인해야 합니다.</p>
+<details class="note">
+<summary>근거와 검토 정보</summary>
+<ul>
+<li>근거 파일: <code>pipeline/PipeThread.cpp</code>, <code>pipeline/PipeThread.h</code></li>
+<li>근거 수준: 코드 확인 (정적 분석, simple_compdb 구성, commit <code>?</code>)</li>
+<li>인용 검증: 통과</li>
+<li>검토: 2026-09-17 · ollama/qwen3.5:4b · 사람 검토 전</li>
+</ul>
+</details>
+<p>다음 단계: <a href="constraints.md">변경 시 지켜야 할 제약</a></p></section></main>
+<script type="module">import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs"; mermaid.initialize({ startOnLoad: true, securityLevel: "loose" });</script>
+</body></html>

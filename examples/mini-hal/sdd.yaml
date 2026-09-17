@@ -1,0 +1,43 @@
+# mini-hal 예제 설정. 저장소 루트에서 `uv run sdd --config examples/mini-hal/sdd.yaml run` 으로 실행한다.
+# 실제 HAL 에서는 ndk_build 로 compile DB 를 만들지만, 예제는 Android.mk 의 플래그를 simple_compdb 에 그대로 옮겼다.
+
+source:
+  root: ./src
+  compile_commands: ./build/compile_commands.json
+  ndk_build:
+    enabled: false
+  simple_compdb:
+    compiler: clang++
+    # -isystem ../stubs: 이 머신에 C++ 툴체인이 없을 때만 필요한 파싱 전용 스텁. 실제 HAL 에서는 NDK sysroot 가 대신한다.
+    flags: ["-std=c++17", "-nostdinc++", "-isystem", "../stubs", "-DUSE_SAT", "-DUSE_DUAL_CAMERA=0", "-DMAX_PIPES=8"]
+
+output:
+  facts_dir: build/facts
+  sdd_dir: sdd
+  diagrams_dir: sdd/diagrams
+
+paths:
+  # 섹션, 프롬프트, 뼈대, 집필 규칙은 저장소 것을 그대로 쓴다. 시나리오 진입점만 예제 코드에 맞춘다.
+  sections_file: ../../config/sections.yaml
+  scenarios_file: ./config/scenarios.yaml
+  clang_uml_file: ../../config/clang-uml.yaml
+  prompts: ../../prompts
+  templates: ../../templates
+  style: ../../style
+
+tools:
+  clang_uml: clang-uml      # PATH 에 없으면 libclang 대체 경로로 자동 전환된다.
+
+agent:
+  kind: ollama
+  model: qwen3.5:4b
+  base_url: http://localhost:11434
+  max_input_chars: 18000
+  temperature: 0.1
+  timeout_sec: 600
+  num_ctx: 16384
+  full_style_guides: false
+
+review:
+  require_citations: true
+  max_retries: 2

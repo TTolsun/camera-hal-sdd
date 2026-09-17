@@ -1,0 +1,33 @@
+# clang-uml sequence diagram 진입점 목록.
+# 이 목록이 SDD "핵심 시나리오" 목차와 1:1 로 대응한다. 시나리오를 추가하려면 여기에만 추가하면 된다.
+#
+# from: clang-uml 이 요구하는 완전한 함수 시그니처. 실제 HAL 코드의 시그니처로 교체해야 한다.
+#       확인 방법: build/diagrams/class_overview.json 에서 methods 의 display_name 을 찾는다.
+# glob: 이 시나리오를 추적할 translation unit. 생략하면 defaults.glob 을 쓴다.
+# depth: 호출 깊이 상한. 소형 모델에 넘길 메시지 수를 제어한다.
+
+defaults:
+  glob: ["**/*.cpp", "**/*.cc"]
+  depth: 4
+
+scenarios:
+  - id: open_device
+    title: 디바이스 오픈 (open)
+    from: "CameraDevice::open(const hw_module_t *, const char *, hw_device_t **)"
+
+  - id: configure_streams
+    title: 스트림 구성 (configureStreams)
+    from: "CameraDevice::configureStreams(camera3_stream_configuration_t *)"
+
+  - id: process_capture_request
+    title: 캡처 요청 처리 (processCaptureRequest)
+    from: "CameraDevice::processCaptureRequest(camera3_capture_request_t *)"
+    depth: 5
+
+  - id: flush
+    title: 플러시 (flush)
+    from: "CameraDevice::flush()"
+
+  - id: close_device
+    title: 디바이스 종료 (close)
+    from: "CameraDevice::close()"

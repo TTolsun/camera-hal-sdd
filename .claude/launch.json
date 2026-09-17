@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mini-hal-docs",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "mkdocs", "serve", "-f", "examples/mini-hal/mkdocs.yml", "-a", "127.0.0.1:8765"],
+      "port": 8765
+    }
+  ]
+}

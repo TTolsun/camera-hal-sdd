@@ -1,0 +1,9 @@
+#pragma once
+namespace std {
+template <class K, class V> class map {
+public:
+    V& operator[](const K&) { return *reinterpret_cast<V*>(0); }
+    void erase(const K&) {}
+    void clear() {}
+};
+}

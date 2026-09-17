@@ -1,0 +1,31 @@
+from sdd.impact import compute, glob_to_regex, match_any
+
+
+def test_glob_double_star_matches_any_depth():
+    assert match_any("a.h", ["**/*.h"])
+    assert match_any("x/y/z.h", ["**/*.h"])
+    assert not match_any("x/y/z.cpp", ["**/*.h"])
+    assert glob_to_regex("Android.mk").match("Android.mk")
+    assert not glob_to_regex("Android.mk").match("jni/Android.mk")
+    assert match_any("jni/Android.mk", ["**/Android.mk"])
+
+
+def test_impact_maps_changed_class_to_sections_and_scenarios(tmp_cfg, sample_model):
+    report = compute(tmp_cfg, sample_model, ["device/CameraDevice.cpp"], base="HEAD~1", head="HEAD")
+    assert "CameraDevice" in report.changed_classes
+    assert "device" in report.packages
+    # components 는 watch(**/*.cpp) 와 클래스 규칙 둘 다에 걸린다.
+    assert "components" in report.sections
+    assert any("클래스 변경" in r for r in report.sections["components"])
+    # 시나리오 경로에 포함된 파일이므로 시나리오도 영향 대상이다.
+    assert "process_capture_request" in report.scenarios
+    assert "scenarios" in report.sections
+    # threading 은 watch 도 클래스 패턴도 맞지 않는다.
+    assert "threading" not in report.sections
+
+
+def test_impact_header_only_change_hits_overview(tmp_cfg, sample_model):
+    report = compute(tmp_cfg, sample_model, ["pipeline/PipeThread.h"], base="a", head="b")
+    assert "overview" in report.sections
+    assert "threading" in report.sections
+    assert "process_capture_request" not in report.scenarios

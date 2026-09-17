@@ -1,0 +1,28 @@
+[project]
+name = "camera-hal-sdd"
+version = "0.1.0"
+description = "Camera HAL SDD 자동 생성 파이프라인: Clang 기반 사실 추출 + 사내 LLM(Hermes/Qwen) 서술 + Gerrit 리뷰"
+requires-python = ">=3.11"
+dependencies = [
+    "markdown>=3.6",
+    "pymdown-extensions>=10.0",
+    "pyyaml>=6.0",
+    "libclang>=16.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+docs = ["mkdocs-material>=9.5"]
+
+[project.scripts]
+sdd = "sdd.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/sdd"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

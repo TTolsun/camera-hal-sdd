@@ -1,0 +1,10 @@
+#pragma once
+namespace std {
+template <class T> class vector {
+public:
+    void push_back(T&& v) {}
+    void push_back(const T& v) {}
+    T* begin() { return nullptr; }
+    T* end() { return nullptr; }
+};
+}
