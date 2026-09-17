@@ -35,6 +35,8 @@ class Config:
     root: Path
     source_root: Path
     compile_commands: Path
+    # 소스 루트 기준 glob. 여기에 걸리는 파일의 선언·호출·플래그는 사실에서 뺀다 (third_party 등).
+    exclude: list[str]
     ndk_build: dict[str, Any]
     facts_dir: Path
     sdd_dir: Path
@@ -154,6 +156,7 @@ def load(path: Path | None = None) -> Config:
         root=root,
         source_root=rel(src.get("root"), "../hal-camera"),
         compile_commands=rel(src.get("compile_commands"), "../hal-camera/compile_commands.json"),
+        exclude=[str(g) for g in (src.get("exclude", []) or [])],
         ndk_build=ndk,
         facts_dir=rel(out.get("facts_dir"), "build/facts"),
         sdd_dir=rel(out.get("sdd_dir"), "sdd"),

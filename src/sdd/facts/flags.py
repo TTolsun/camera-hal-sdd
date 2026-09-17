@@ -19,11 +19,16 @@ _PP_LINE = re.compile(r"^\s*#\s*(if|ifdef|ifndef|elif)\b(.*)$")
 _MAX_USAGES_PER_DEFINE = 20
 
 
-def _source_files(root: Path):
+def _source_files(root: Path, exclude: list[str] = ()):
+    from ..impact import match_any
+
     for p in root.rglob("*"):
         if p.suffix.lower() not in _SRC_SUFFIXES:
             continue
-        if any(part in _SKIP_DIRS for part in p.relative_to(root).parts[:-1]):
+        rel = p.relative_to(root)
+        if any(part in _SKIP_DIRS for part in rel.parts[:-1]):
+            continue
+        if exclude and match_any(rel.as_posix(), list(exclude)):
             continue
         yield p
 
@@ -37,7 +42,7 @@ def collect(model: KnowledgeModel, cfg: Config, entries: list[dict[str, Any]]) -
 
     # 한 번의 정규식으로 모든 플래그 이름을 찾는다. 이름이 긴 것부터 넣어 부분 일치를 막는다.
     pattern = re.compile(r"\b(" + "|".join(re.escape(n) for n in sorted(model.defines, key=len, reverse=True)) + r")\b")
-    for src in _source_files(cfg.source_root):
+    for src in _source_files(cfg.source_root, cfg.exclude):
         try:
             lines = src.read_text(encoding="utf-8", errors="replace").splitlines()
         except OSError:

@@ -67,7 +67,8 @@ def match_any(path: str, globs: list[str]) -> bool:
 
 
 def changed_files(source_root: Path, base: str, head: str = "HEAD") -> list[str]:
-    res = subprocess.run(["git", "diff", "--name-only", f"{base}..{head}"], cwd=source_root,
+    # --relative: 소스 루트가 저장소의 하위 디렉터리여도 facts 의 file 과 같은 기준(소스 루트 상대)이 된다.
+    res = subprocess.run(["git", "diff", "--name-only", "--relative", f"{base}..{head}"], cwd=source_root,
                          check=True, capture_output=True, text=True)
     return [line.strip().replace("\\", "/") for line in res.stdout.splitlines() if line.strip()]
 
