@@ -90,15 +90,33 @@ def _loc(cursor: cindex.Cursor, root: Path) -> Location | None:
     return Location(file=relpath(f.name, root), line=int(cursor.location.line))
 
 
+# 소스 루트 기준 제외 glob (cfg.source.exclude). extract.run 이 set_excludes 로 넣는다.
+_EXCLUDES: list[re.Pattern[str]] = []
+_UNDER_CACHE: dict[str, bool] = {}
+
+
+def set_excludes(patterns: list[str]) -> None:
+    from ..impact import glob_to_regex
+
+    _EXCLUDES[:] = [glob_to_regex(p) for p in patterns]
+    _UNDER_CACHE.clear()
+
+
 def _under(cursor: cindex.Cursor, root: Path) -> bool:
+    """소스 루트 안이면서 exclude 에 걸리지 않는 파일의 커서인가."""
     f = cursor.location.file
     if f is None:
         return False
+    cached = _UNDER_CACHE.get(f.name)
+    if cached is not None:
+        return cached
     try:
-        Path(f.name).resolve().relative_to(root)
-        return True
+        rel = Path(f.name).resolve().relative_to(root).as_posix()
+        ok = not any(p.fullmatch(rel) for p in _EXCLUDES)
     except ValueError:
-        return False
+        ok = False
+    _UNDER_CACHE[f.name] = ok
+    return ok
 
 
 def _walk(cursor: cindex.Cursor, root: Path) -> Iterator[cindex.Cursor]:

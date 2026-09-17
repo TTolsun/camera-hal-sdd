@@ -7,6 +7,8 @@ source:
   root: ../hal-camera
   # NDK-build 가 생성한 compile DB. 없으면 ndk_build 설정으로 생성한다.
   compile_commands: ../hal-camera/compile_commands.json
+  # 사실에서 뺄 파일 (소스 루트 기준 glob). third_party 헤더처럼 compile DB 에 딸려 들어오는 코드를 제외한다.
+  exclude: []
   ndk_build:
     enabled: true
     # `ndk-build compile_commands.json` 을 실행할 디렉터리 (jni/ 의 부모 또는 NDK_PROJECT_PATH)
