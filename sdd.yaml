@@ -1,0 +1,48 @@
+# camera-hal-sdd 파이프라인 설정.
+# 상대 경로는 이 파일이 있는 디렉터리를 기준으로 해석한다.
+# 로컬에서만 다른 값을 쓰려면 sdd.local.yaml 에 같은 구조로 덮어쓴다 (git 제외).
+
+source:
+  # Camera HAL 소스 루트. 이 저장소 옆에 hal-camera 가 clone 되어 있다고 가정한다.
+  root: ../hal-camera
+  # NDK-build 가 생성한 compile DB. 없으면 ndk_build 설정으로 생성한다.
+  compile_commands: ../hal-camera/compile_commands.json
+  ndk_build:
+    enabled: true
+    # `ndk-build compile_commands.json` 을 실행할 디렉터리 (jni/ 의 부모 또는 NDK_PROJECT_PATH)
+    project_dir: ../hal-camera
+    # Android.mk 위치가 기본과 다르면 여기서 지정한다.
+    args: []
+    # NDK r25 이상을 권장한다. 그 이하는 compile_commands.json 의 인자 escaping 이 불안정하다.
+
+output:
+  facts_dir: build/facts          # canonical knowledge model (facts.json)
+  sdd_dir: sdd                    # 생성된 SDD Markdown (MkDocs docs_dir)
+  diagrams_dir: sdd/diagrams      # clang-uml 이 만든 Mermaid 다이어그램 복사본
+
+tools:
+  clang_uml: clang-uml
+
+agent:
+  # ollama | openai-compatible | dry-run
+  # dry-run 은 LLM 을 호출하지 않고 build/prompts/ 에 프롬프트만 기록한다.
+  kind: ollama
+  # 사내 운영 모델. Hermes 서비스를 쓰면 kind 를 openai-compatible 로 바꾸고 base_url 을 그 엔드포인트로 지정한다.
+  model: qwen3.5:4b
+  base_url: http://localhost:11434
+  # 소형 모델 기준 입력 상한. 한국어+코드 혼합에서 약 3 자 = 1 토큰으로 보고 6k 토큰에 맞춘 값이다.
+  # 초과분은 budget.py 가 우선순위 낮은 사실 블록부터 통째로 제외하고, 제외 목록을 문서 frontmatter 에 남긴다.
+  max_input_chars: 18000
+  temperature: 0.1
+  timeout_sec: 300
+  # 컨텍스트 창을 명시해야 하는 런타임(ollama num_ctx)용. 0 이면 지정하지 않는다.
+  num_ctx: 8192
+  # true 이면 style/i-have-adhd.md, style/fluent-korean.md 전문도 system 프롬프트에 넣는다 (약 13k 자).
+  # 4B 급 모델에서는 false 로 두고 style/README.md 의 번안 규칙 5개만 넣는다.
+  full_style_guides: false
+
+review:
+  # true 이면 LLM 출력의 모든 file:line 인용이 facts 에 존재해야 통과한다.
+  require_citations: true
+  # 검증 실패 시 재시도 횟수. 초과하면 status: needs-review 로 기록하고 사람에게 넘긴다.
+  max_retries: 1

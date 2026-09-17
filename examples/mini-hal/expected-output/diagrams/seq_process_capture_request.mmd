@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant CameraDevice
+    participant RequestManager
+    participant FrameFactory
+    participant PreviewFrameFactory
+    participant CaptureFrameFactory
+    participant PipeThread
+    CameraDevice->>RequestManager: submit()
+    RequestManager->>RequestManager: selectFactory()
+    RequestManager-->>FrameFactory: createFrame() [virtual 후보]
+    FrameFactory-->>PreviewFrameFactory: buildPipes() [virtual 후보]
+    FrameFactory-->>CaptureFrameFactory: buildPipes() [virtual 후보]
+    RequestManager-->>CaptureFrameFactory: createFrame() [virtual 후보]
+    CaptureFrameFactory->>FrameFactory: createFrame()
+    FrameFactory-->>PreviewFrameFactory: buildPipes() [virtual 후보]
+    FrameFactory-->>CaptureFrameFactory: buildPipes() [virtual 후보]
+    RequestManager->>PipeThread: enqueue()

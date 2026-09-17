@@ -1,0 +1,11 @@
+#pragma once
+namespace std {
+class thread {
+public:
+    thread() {}
+    template <class F> explicit thread(F f) {}
+    thread& operator=(thread&&) { return *this; }
+    bool joinable() const { return false; }
+    void join() {}
+};
+}

@@ -1,0 +1,10 @@
+#pragma once
+namespace std {
+template <class Sig> class function;
+template <class R, class... Args> class function<R(Args...)> {
+public:
+    function() {}
+    template <class F> function(F f) {}
+    R operator()(Args... args) const { return R(); }
+};
+}

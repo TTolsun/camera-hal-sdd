@@ -1,0 +1,32 @@
+# mini-hal 의 시나리오 진입점. 시그니처는 examples/mini-hal/src 의 실제 선언과 같다.
+
+defaults:
+  glob: ["**/*.cpp"]
+  depth: 5
+
+scenarios:
+  - id: open_device
+    title: 디바이스 오픈 (camera_device_open)
+    from: "camera_device_open(int, halcam::CameraDevice **)"
+
+  - id: configure_streams
+    title: 스트림 구성 (configureStreams)
+    from: "halcam::CameraDevice::configureStreams(camera3_stream_configuration_t *)"
+
+  - id: process_capture_request
+    title: 캡처 요청 처리 (processCaptureRequest)
+    from: "halcam::CameraDevice::processCaptureRequest(camera3_capture_request_t *)"
+    depth: 6
+
+  - id: flush
+    title: 플러시 (flush)
+    from: "halcam::CameraDevice::flush()"
+
+  - id: close_device
+    title: 디바이스 종료 (camera_device_close)
+    from: "camera_device_close(halcam::CameraDevice *)"
+
+  # 워커 스레드 쪽 흐름. processCaptureRequest 는 enqueue 에서 끝나고, 실제 처리는 이 진입점에서 이어진다.
+  - id: frame_processing
+    title: 워커 스레드 프레임 처리 (onFrame)
+    from: "halcam::RequestManager::onFrame(halcam::Frame &)"

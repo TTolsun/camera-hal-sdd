@@ -1,0 +1,6 @@
+sequenceDiagram
+    participant CameraModule
+    participant CameraDevice
+    participant RequestManager
+    CameraModule->>CameraDevice: close()
+    CameraDevice->>RequestManager: drain()

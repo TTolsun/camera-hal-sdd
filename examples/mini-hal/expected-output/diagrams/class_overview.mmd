@@ -1,0 +1,79 @@
+classDiagram
+    class camera3_callback_ops {
+    }
+    class camera3_capture_request {
+    }
+    class camera3_capture_result {
+    }
+    class camera3_stream {
+    }
+    class camera3_stream_configuration {
+    }
+    class CameraDevice {
+        +CameraDevice()
+        +~CameraDevice()
+        +initialize()
+        +configureStreams()
+        +processCaptureRequest()
+        +flush()
+    }
+    class CaptureFrameFactory {
+        +createFrame()
+        +buildPipes()
+    }
+    class Frame {
+    }
+    class FrameFactory {
+        +~FrameFactory()
+        +createFrame()
+        +runPipes()
+        +buildPipes()
+    }
+    class IspPipe {
+        +IspPipe()
+        +process()
+    }
+    class Pipe {
+        +Pipe()
+        +~Pipe()
+        +process()
+        +name()
+    }
+    class PipeThread {
+        +PipeThread()
+        +~PipeThread()
+        +start()
+        +stop()
+        +enqueue()
+        +threadLoop()
+    }
+    class PreviewFrameFactory {
+        +buildPipes()
+    }
+    class RequestManager {
+        +RequestManager()
+        +~RequestManager()
+        +submit()
+        +drain()
+        +selectFactory()
+        +onFrame()
+    }
+    class SatPipe {
+        +SatPipe()
+        +process()
+        +alignWithSecondary()
+    }
+    Pipe <|-- IspPipe
+    Pipe <|-- SatPipe
+    FrameFactory <|-- PreviewFrameFactory
+    FrameFactory <|-- CaptureFrameFactory
+    camera3_stream_configuration --> camera3_stream
+    FrameFactory --> Pipe
+    PipeThread --> Frame
+    RequestManager --> camera3_callback_ops
+    RequestManager --> PreviewFrameFactory
+    RequestManager --> CaptureFrameFactory
+    RequestManager --> PipeThread
+    RequestManager --> Frame
+    CameraDevice --> camera3_callback_ops
+    CameraDevice --> RequestManager

@@ -1,0 +1,13 @@
+# 파이프라인 중간 산출물 (compile DB, clang-uml/Doxygen 출력, 프롬프트 덤프)
+build/
+site/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# 로컬 전용 설정
+sdd.local.yaml

@@ -1,0 +1,118 @@
+# camera-hal-sdd 파이프라인 설계
+
+이 문서는 SDD 가 아니라, SDD 를 만드는 파이프라인 자체의 설계 기록입니다. 왜 이렇게 결정했는지를 남기는 것이 목적입니다.
+
+## 1. 목표
+
+현업 Camera HAL 개발자가 코드를 수정할 때 실제로 열어 보는 설계 문서를, 사람이 처음부터 쓰지 않고도 유지되게 합니다. "유지" 가 핵심입니다. 한 번 만드는 문서는 이미 많고, 한 달 뒤에 코드와 어긋나는 것이 문제였습니다.
+
+## 2. 제약
+
+| 제약 | 결정 |
+|---|---|
+| 코드가 사내 밖으로 나가면 안 됨 | 외부 SaaS(Devin Wiki, Driver 등) 제외. LLM 은 사내 Ollama(Qwen, Hermes) 또는 사내 openai-compatible 게이트웨이만 지원. |
+| 운영 모델이 소형(Qwen 3.5 4B 급) | 파일 전체를 넘기지 않음. 결정적 사실 추출이 무거운 일을 하고, LLM 은 섹션 하나 분량의 사실만 받아 짧은 서술을 씀. 입력 예산 초과분은 사실 블록 단위로 제외하고 기록. |
+| 개발 시 NDK-build, 릴리스는 AOSP 빌드 | compile DB 는 `ndk-build compile_commands.json` 에서 얻음. NDK 구성 하나만 문서에 반영되고, AOSP 전용 `-D` 는 한계로 명시. |
+| C++ (#ifdef, factory, virtual, HAL3 콜백) | LLM 이 C++ 구조를 추론하지 않게 함. 구조는 Clang(clang-uml + libclang) 이 읽고, 정적으로 끊기는 호출은 "확인 필요" 로 표시. |
+
+## 3. 왜 완제품(DeepWiki 류)을 쓰지 않는가
+
+2026년 9월 기준으로 조사한 결과입니다.
+
+- CodeWiki(1.7k★)는 `--update --compare-to` 로 증분 갱신이 되지만 tree-sitter 기반이라 C/C++ 정확도가 DeepWiki 보다 낮고(53.24% 대 56.39%), 논문에서도 C/C++ 를 약점으로 인정합니다. Clang 사실을 주입하려면 내부를 고쳐야 합니다.
+- OpenDeepWiki(3.6k★), deepwiki-open 은 LLM 에이전트가 파일을 직접 읽는 구조라 소형 모델과 C++ 에서 환각을 막을 장치가 없습니다.
+- RepoWiki(272★)는 심볼 사전 인덱싱을 하지만 C++ 처리 방식이 공개되어 있지 않습니다.
+
+이들은 "repo 주소만 넣으면 위키가 나오는" UX 가 목적이고, 우리 목적은 리뷰를 거쳐 docs 저장소에 들어가는 SDD 입니다. UX 보다 사실 정확도와 리뷰 흐름이 우선이므로 부품(clang-uml, libclang)을 직접 조립했습니다.
+
+## 4. 왜 Doxygen 을 쓰지 않는가
+
+초기 설계에는 Doxygen XML 이 있었습니다. 뺀 이유는 Doxygen 이 이 파이프라인에서 하는 일이 "주석과 선언 위치 뽑기" 하나뿐이었고, 그 일은 compile DB 를 그대로 쓰는 libclang 이 더 정확하게 하기 때문입니다.
+
+- libclang 은 `-fparse-all-comments` 로 Doxygen 형식이 아닌 `//` 주석도 선언에 붙입니다. HAL 코드는 대부분 그런 주석입니다.
+- 선언(.h)과 정의(.cpp) 위치를 둘 다 얻습니다. 개발자가 열어 볼 곳은 정의 쪽이므로 인용은 정의를 우선합니다.
+- Doxyfile 이라는 별도 설정 체계와 XML 파싱 코드가 사라집니다.
+
+## 4-1. clang-uml 이 없을 때: libclang 대체 경로
+
+`facts/callgraph.py` 는 clang-uml 이 PATH 에 없을 때 libclang 만으로 시나리오(호출 순서)와 클래스 관계(상속, 필드 association)를 뽑습니다. PoC 와 CI 초기 구성에서 도구 설치 없이 결과를 볼 수 있게 하려는 목적입니다.
+
+- 가상 함수 호출은 정적으로 확정되지 않으므로 기반 구현과 override 를 모두 "virtual 후보" 로 표시합니다. `Base::method()` 처럼 한정된 호출은 토큰에서 `::` 를 보고 정적 호출로 처리합니다.
+- 함수 포인터 멤버(`callbacks_->process_capture_result`)와 `std::function` 호출은 "정적 추적 불가" 로 표시하고 `unresolved` 를 셉니다. HAL 콜백 경계와 스레드 경계가 문서에 드러나는 지점입니다.
+- 얻지 못하는 것: 템플릿 관계, 조건 분기 블록(alt/loop), include 그래프, 패키지 다이어그램. 운영 환경에서는 clang-uml 을 설치하는 것을 권장합니다.
+- `examples/mini-hal/stubs/` 는 C++ 툴체인이 없는 머신에서만 필요한 파싱 전용 표준 라이브러리 선언입니다. 실제 HAL 에서는 NDK sysroot 의 libc++ 가 compile DB 에 들어오므로 쓰지 않습니다.
+
+## 5. 사실 모델과 인용 규칙
+
+`build/facts/facts.json` 이 단일 진실 공급원입니다. 클래스, 메서드, 자유 함수, 플래그 사용 위치, 시나리오 메시지 모두 `file:line` 을 가집니다.
+
+LLM 출력은 다음 규칙으로 검증합니다.
+
+1. 본문의 모든 `` `파일:줄` `` 인용은 facts 의 citations 집합에 있어야 합니다.
+2. 인용이 하나도 없으면 실패입니다 (`review.require_citations`).
+3. 실패하면 문제를 붙여 한 번 재시도하고, 그래도 실패하면 `status: needs-review` 로 기록합니다. 문서는 버리지 않고 사람에게 넘깁니다.
+
+이 규칙은 환각을 없애지 못합니다. 다만 "사실에 없는 위치를 가리키는 문장" 은 기계적으로 걸러지고, 리뷰어는 인용을 따라가서 문장을 확인할 수 있습니다.
+
+## 5-1. 문서 형식과 집필 규칙
+
+omm-doc-workflow 가 만든 HALCamera 개발자 가이드(ttolsun.github.io/hal-camera)의 형식을 그대로 따릅니다. 그 형식이 현업 개발자에게 맞는 이유는 페이지가 "무엇을 알아야 하는가" 가 아니라 "무엇을 수정하려는가" 에서 시작하기 때문입니다.
+
+- 집필 규칙은 `style/README.md` 입니다. i-have-adhd 와 fluent-korean 원문을 개발자 문서용으로 번안한 5개 항목이며, omm-doc-workflow 의 `style/` 과 같은 파일입니다. `brief.mjs` 가 하는 것처럼 system 프롬프트에 넣습니다. 소형 모델에서는 README 만, 큰 모델에서는 원문 두 개도 넣습니다(`agent.full_style_guides`).
+- 페이지 뼈대는 `templates/page.md` 하나입니다. 할 일 한 문장, 확인할 내용 → 절 표, 본문, 근거와 검토 정보, 다음 단계 하나.
+- omm 의 근거 블록은 파일 목록과 근거 수준, 검토 commit 을 남깁니다. 여기서는 같은 블록에 `파일:줄` 인용 검증 결과와 예산 때문에 제외된 사실 목록을 더합니다.
+- omm 과 다른 점: 표, 번호 목록, 다이어그램을 LLM 이 쓰지 않고 파이프라인이 사실에서 직접 만듭니다. 소형 모델이 구조를 틀리게 적을 여지를 없애기 위해서입니다.
+
+## 6. 섹션 설계
+
+섹션은 `config/sections.yaml` 에서 정의하며, 각 섹션은 사실 출처와 영향 감시 경로를 고정합니다. 이 구조 덕분에 새 섹션을 추가할 때 코드가 아니라 설정만 바뀝니다.
+
+| 섹션 | 종류 | 사실 | 이유 |
+|---|---|---|---|
+| 시스템 개요 | prose | 패키지 목록, HAL 진입점 함수 | 새 팀원이 처음 읽는 페이지. 클래스 목록은 넣지 않는다. |
+| 컴포넌트 구조와 책임 | per-package | 클래스, 상속, 메서드, 주석 | 패키지마다 LLM 호출을 나눠서 소형 모델 예산에 맞춘다. |
+| 핵심 시나리오 | per-scenario | clang-uml sequence | 다이어그램은 도구 출력 그대로. LLM 은 설명만. |
+| Feature flag 매트릭스 | table | `-D` + `#if` 위치 | LLM 이 필요 없는 곳에는 쓰지 않는다. |
+| 스레드와 큐 모델 | prose, needs_human | `*Thread*`, `*Queue*` | 정적 분석 한계를 문서 상태로 드러낸다. |
+
+## 7. 변경 영향 매핑
+
+두 규칙을 합칩니다.
+
+1. 경로 규칙: 섹션의 `watch` glob 에 변경 파일이 걸리면 그 섹션.
+2. 심볼 규칙: 변경 파일에 선언 또는 정의가 있는 클래스가 속한 패키지, 변경 파일을 지나는 시나리오.
+
+경로 규칙만으로는 `.cpp` 하나가 바뀌었을 때 모든 per-package 섹션이 다시 생성됩니다. 심볼 규칙이 그것을 해당 패키지로 좁힙니다.
+
+## 8. 리뷰 흐름
+
+```
+HAL Gerrit change
+   → CI: sdd run --base <parent>
+   → sdd/ 변경분 + build/change_impact.md 를 docs 저장소 change 로 push
+   → 리뷰어: needs-review 문서, facts_omitted, 변경 요약 순으로 확인
+   → merge → mkdocs build → 사내 게시
+```
+
+문서 change 는 HAL change 와 같은 topic 으로 묶어서 함께 merge 되게 하는 것을 권장합니다.
+
+## 8-1. 소형 모델(qwen3.5:4b) 실제 실행에서 관찰한 것
+
+`examples/mini-hal` 을 로컬 Ollama 의 `qwen3.5:4b` 로 여러 번 돌리며 확인한 내용입니다. 모두 파이프라인에 반영했습니다.
+
+| 관찰 | 대응 |
+|---|---|
+| thinking 모드가 켜져 있으면 호출 하나에 수 분이 걸리고 본문 품질은 나아지지 않는다. | `agent.think: false` 기본값. `/api/chat` 에 `think: false` 를 보낸다. |
+| system 프롬프트에 style/README.md 전문을 넣으면 모델이 그 문서(출처 링크 포함)를 그대로 되풀이한다. | README 에서 번호 붙은 규칙 5개만 뽑아 넣는다 (`style_rules`). 되풀이된 줄은 `strip_echo` 가 지운다. |
+| 사용자 프롬프트의 `## 사실`, `## 출력` 같은 제목을 보고 문서를 이어 쓰듯 표와 목록을 다시 출력한다. | 프롬프트 제목을 `사실:` 형식으로 바꾸고, 마지막 줄을 `본문:` 으로 끝내며, 표가 출력되면 검증 실패로 재시도한다. |
+| 인용할 때 디렉터리를 빼고 `CameraModule.cpp:17` 처럼 쓴다. | basename 과 줄이 유일하게 일치하면 `normalize_citations` 가 전체 경로로 고친다. |
+| 개요처럼 표에 `file:line` 이 적은 절에서는 인용을 아예 안 한다. | 개요에도 클래스 사실을 넘기되 표는 그리지 않는다(`class_table: false`). 재시도 메시지에 인용 가능한 위치 예를 붙인다. |
+| 같은 문단을 끝없이 반복하는 폭주가 한 번 있었다(70KB). | `agent.max_output_tokens` (num_predict) 로 상한을 둔다. |
+| 시나리오 절(호출 순서가 번호로 주어진 절)은 거의 항상 통과하고, 개요 절은 자주 `needs-review` 가 된다. | 사실이 구조화되어 있을수록 소형 모델이 안정적이다. 개요는 사람이 한 번 다듬는 절로 두는 것이 현실적이다. |
+
+## 9. 열린 문제
+
+- clang-uml sequence 의 `from` 시그니처를 실제 HAL 코드로 채워야 합니다. `build/diagrams/class_overview.json` 에서 찾을 수 있습니다.
+- NDK sysroot 경로가 CI 머신과 다르면 `config/clang-uml.yaml` 의 `remove_compile_flags` / `add_compile_flags` 로 맞춰야 합니다.
+- 소형 모델의 한국어 서술 품질은 실제 HAL 로 돌려 본 뒤 프롬프트를 조정해야 합니다. 첫 목표는 "틀린 말을 하지 않는 것" 이고, 문장 품질은 그다음입니다.
+- omm-doc-workflow 와의 연결: `facts.json` 은 언어 무관 JSON 이므로 docflow 의 `factsAdapter` 입력으로 쓸 수 있습니다. 두 파이프라인을 합칠지는 실제 HAL 에서 이 파이프라인이 안정된 뒤에 결정합니다.

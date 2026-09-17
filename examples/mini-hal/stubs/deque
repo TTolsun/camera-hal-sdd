@@ -1,0 +1,10 @@
+#pragma once
+namespace std {
+template <class T> class deque {
+public:
+    void push_back(const T& v) {}
+    void pop_front() {}
+    T& front() { return *reinterpret_cast<T*>(0); }
+    bool empty() const { return true; }
+};
+}

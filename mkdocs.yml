@@ -1,0 +1,36 @@
+site_name: Camera HAL SDD
+docs_dir: sdd
+site_dir: site
+theme:
+  name: material
+  language: ko
+  features:
+    - navigation.sections
+    - content.code.copy
+markdown_extensions:
+  - admonition
+  - tables
+  - attr_list
+  - pymdownx.details
+  - toc:
+      permalink: true
+      # 한글 제목도 앵커가 되게 한다. generate.py 의 slugify 와 같은 규칙.
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+nav:
+  - 시작: index.md
+  - 코드로 확인한 구조:
+      - 시스템 개요: overview.md
+      - 컴포넌트 구조와 책임: components.md
+      - 핵심 시나리오: scenarios/index.md
+      - Feature flag 매트릭스: feature-flags.md
+      - 스레드와 큐 모델: threading.md
+  - 사람이 기록한 설계:
+      - 변경 시 지켜야 할 제약: constraints.md
+      - 설계 결정 기록: decisions.md

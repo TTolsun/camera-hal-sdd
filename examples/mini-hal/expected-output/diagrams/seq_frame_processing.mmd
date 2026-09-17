@@ -1,0 +1,13 @@
+sequenceDiagram
+    participant RequestManager
+    participant FrameFactory
+    participant IspPipe
+    participant SatPipe
+    participant camera3_callback_ops
+    RequestManager->>FrameFactory: runPipes()
+    FrameFactory-->>IspPipe: process() [virtual 후보]
+    FrameFactory-->>SatPipe: process() [virtual 후보]
+    SatPipe->>SatPipe: alignWithSecondary()
+    RequestManager->>RequestManager: sendResult()
+    RequestManager-->>camera3_callback_ops: process_capture_result() [함수 포인터, 정적 추적 불가]
+    RequestManager->>RequestManager: onFrameDone()
