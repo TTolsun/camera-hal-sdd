@@ -20,6 +20,7 @@ from typing import Any
 
 from .budget import Block, fit
 from .config import Config
+from .diagrams import diagram_block, section_diagram
 from .facts.model import ClassInfo, KnowledgeModel, Scenario
 from .impact import ImpactReport
 from .llm import Agent
@@ -100,6 +101,8 @@ class Generator:
     # ---- 종류별 --------------------------------------------------------------
 
     def _prose(self, sec: dict[str, Any]) -> Path:
+        # Validate diagram policy before spending a model call. Structure is never LLM output.
+        diagram = diagram_block(section_diagram(self.cfg, self.model, sec))
         facts = sec.get("facts", {})
         tables: list[str] = []
         blocks: list[Block] = []
@@ -130,7 +133,8 @@ class Generator:
                 tables.append("## 코드를 처음 읽는 순서\n\n" + ro)
 
         text, omitted, verdict = self._ask(sec["id"], sec, sec["title"], blocks, self._existing(sec))
-        body = "\n\n".join(tables + [f"## {sec.get('prose_heading', '구조 설명')}\n\n{text}"])
+        body = "\n\n".join([f"## {sec.get('prose_heading', '구조 설명')}\n\n{text}"]
+                           + ([diagram] if diagram else []) + tables)
         if sec.get("needs_human"):
             body += "\n\n확인 필요: 이 절의 내용은 정적 분석 결과입니다. 콜백 실행 스레드와 종료 순서는 코드를 직접 실행해서 확인해야 합니다."
         return self._write_section(sec, body, blocks, tables, verdict, omitted)
@@ -415,6 +419,7 @@ class Generator:
             return ""
         text = _FRONTMATTER.sub("", path.read_text(encoding="utf-8"), count=1)
         text = re.sub(r"^# .*\n", "", text, count=1)
+        text = re.sub(r"<!-- sdd:class-diagram -->.*?<!-- /sdd:class-diagram -->", "", text, flags=re.S)
         # 표, 다이어그램, 근거 블록, 번호 목록, 다음 단계 줄은 파이프라인이 다시 만든다. LLM 에는 문단만 돌려준다.
         text = re.sub(r"```mermaid.*?```", "", text, flags=re.S)
         text = re.sub(r"^\?\?\? note.*?(?=^\S|\Z)", "", text, flags=re.S | re.M)

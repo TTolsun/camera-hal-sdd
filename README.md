@@ -75,6 +75,14 @@ uv run sdd --config examples/mini-hal/sdd.yaml run     # extract + generate (Oll
 
 ## 빠른 시작
 
+사내 도입 전에 공개 libcamera 소스로 검증하려면 [libcamera 가정용 검증 환경](docs/libcamera-home-lab.md)을 따르세요. Ubuntu/Meson 준비, 실행용 설정, 커밋별 갱신 설계와 현재 구현의 한계를 정리했습니다.
+
+[실제 WSL2 실행 기록](docs/libcamera-wsl-run.md)과 [공개 검토용 문서](https://ttolsun.github.io/libcamera-sdd/)도 확인할 수 있습니다. 전용 저장소는 [TTolsun/libcamera-sdd](https://github.com/TTolsun/libcamera-sdd)이며, 원본 이력과 문서를 별도 브랜치로 관리합니다.
+
+`sdd export-site`는 libcamera 공식 문서와 OMM의 읽기 중심 디자인을 참고한 정적 사이트를 만듭니다. 좌측 탐색 메뉴, 우측 목차, 제목 검색과 Mermaid 확대·요소 검색을 제공합니다. [사이트 구성과 사내 배포 설정](docs/document-site.md)을 확인하세요. 생성·디자인 기술은 이 저장소에 두고 `libcamera-sdd`에는 산출물만 배포합니다.
+
+Mermaid는 공통 생성 규칙으로 Markdown을 만들 때마다 갱신합니다. `site.enabled: true`이면 `generate`와 `run`이 사이트 빌드까지 수행합니다. 빌드는 내부 링크를 검사하고 입력·출력 해시를 기록하며, 직전 빌드에서 관리한 오래된 파일만 정리합니다. `sdd verify-site`로 결과를 다시 검사할 수 있습니다. 유지보수 시 [디자인 계약](DESIGN.md)과 회귀 테스트를 함께 갱신하세요.
+
 ```bash
 uv sync --extra dev
 uv run sdd doctor            # 도구, compile DB, LLM 도달 여부 점검
