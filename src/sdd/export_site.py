@@ -130,7 +130,7 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
         entries.insert(0, ("시작하기", "문서 안내", "index.md"))
     model = KnowledgeModel.load(cfg.facts_path) if cfg.facts_path.exists() else None
     if model is None and any(s.get("kind", "prose") == "prose" and s.get("facts", {}).get("classes")
-                            and {**(cfg.raw.get("diagrams") or {}), **(s.get("diagram") or {})}.get("enabled", True)
+                            and {**(cfg.raw.get("diagrams") or {}), **(s.get("diagram") or {})}.get("enabled", False)
                             for s in sections.values()):
         raise RuntimeError("facts.json is required to generate configured class diagrams")
     known = set(texts)
@@ -142,16 +142,18 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
         page_title = _title_of_text(body)
         body = re.sub(r"^\s*# .+\n", "", body, count=1)
         section = sections.get(rel, {})
-        if model and section and section.get("kind", "prose") == "prose":
-            if meta.get("source_commit") != model.meta.get("source_commit"):
+        if section and section.get("kind", "prose") == "prose":
+            if model and meta.get("source_commit") != model.meta.get("source_commit"):
                 raise RuntimeError(f"Facts and page source commits differ: {rel}")
-            diagram = section_diagram(cfg, model, section)
+            diagram = section_diagram(cfg, model, section) if model else ""
+            block = diagram_block(diagram)
+            if "<!-- sdd:class-diagram -->" in body:
+                # Keep the heading for existing route links, but never retain stale edges.
+                replacement = block.strip() or "## 클래스 관계\n\n현재 설정에서 표시할 클래스 관계 그림이 없습니다."
+                body = re.sub(r"<!-- sdd:class-diagram -->.*?<!-- /sdd:class-diagram -->", lambda _: replacement, body, flags=re.S)
+                block = ""
             if diagram:
                 diagram_sources[rel] = diagram
-                block = diagram_block(diagram)
-                if "<!-- sdd:class-diagram -->" in body:
-                    body = re.sub(r"<!-- sdd:class-diagram -->.*?<!-- /sdd:class-diagram -->", lambda _: block.strip(), body, flags=re.S)
-                    block = ""
                 before, marker, after = body.partition('??? note "근거와 검토 정보"')
                 # Move intact generated sections into reading order; preserve their wording.
                 parts = re.fullmatch(r"(.*?)^(## 관련 클래스\n.*?)(^## 구조 설명\n.*)", before, re.S | re.M)

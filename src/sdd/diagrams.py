@@ -43,7 +43,7 @@ def class_diagram(model: KnowledgeModel, patterns: list[str], limit: int = 16, d
 
 def section_diagram(cfg: Config, model: KnowledgeModel, section: dict) -> str:
     policy = {**(cfg.raw.get("diagrams") or {}), **(section.get("diagram") or {})}
-    if not policy.get("enabled", True):
+    if not policy.get("enabled", False):
         return ""
     return class_diagram(model, section.get("facts", {}).get("classes", []),
                          limit=int(policy.get("max_nodes", 16)),

@@ -26,6 +26,7 @@ def prepare(cfg, model):
     next: {title: Device, link: device.md}
 ''', encoding='utf-8')
     cfg.raw['site'] = {'title': 'Test <Site>', 'source_url': 'https://github.com/example/source'}
+    cfg.raw['diagrams'] = {'enabled': True}
     cfg.sdd_dir.mkdir(parents=True)
     (cfg.sdd_dir / 'nested').mkdir()
     text = '---\nsource_commit: ' + 'a' * 40 + '\nstatus: needs-review\n---\n\n'
@@ -127,7 +128,7 @@ def test_failed_build_preserves_previous_site(tmp_cfg, sample_model):
     prepare(tmp_cfg, sample_model)
     out = export_site(tmp_cfg)
     before = {p.relative_to(out): p.read_bytes() for p in out.rglob('*') if p.is_file()}
-    tmp_cfg.raw['diagrams'] = {'max_nodes': 1}
+    tmp_cfg.raw['diagrams']['max_nodes'] = 1
     with pytest.raises(RuntimeError, match='narrow facts.classes'):
         export_site(tmp_cfg)
     assert before == {p.relative_to(out): p.read_bytes() for p in out.rglob('*') if p.is_file()}
@@ -156,3 +157,54 @@ def test_generate_command_automatically_builds_configured_site(tmp_cfg, sample_m
     assert main(['--config', str(config), 'generate']) == 0
     assert (tmp_cfg.build_dir / 'site/site-manifest.json').is_file()
     assert '```mermaid' in (tmp_cfg.sdd_dir / 'device.md').read_text(encoding='utf-8')
+
+
+@pytest.mark.parametrize('collision', ['nested/detail.html', 'nested'])
+def test_unmanaged_output_collision_preserves_entire_destination(tmp_cfg, sample_model, collision):
+    prepare(tmp_cfg, sample_model)
+    out = tmp_cfg.build_dir / 'site'
+    target = out / collision
+    target.parent.mkdir(parents=True)
+    target.write_text('operator-owned content', encoding='utf-8')
+    before = {p.relative_to(out): p.read_bytes() for p in out.rglob('*') if p.is_file()}
+    with pytest.raises(RuntimeError, match='Unmanaged artifact|not a directory'):
+        export_site(tmp_cfg)
+    assert before == {p.relative_to(out): p.read_bytes() for p in out.rglob('*') if p.is_file()}
+
+
+@pytest.mark.parametrize('policy', [{'enabled': False}, {'enabled': True, 'classes': ['NoSuchClass']}])
+def test_rebuild_removes_stale_managed_diagram_but_preserves_manual_mermaid(tmp_cfg, sample_model, policy):
+    import yaml
+    from sdd.generate import Generator
+    from sdd.llm import Agent
+    from sdd.site_build import verify_site
+    prepare(tmp_cfg, sample_model)
+    Generator(tmp_cfg, sample_model, Agent(tmp_cfg.agent)).run()
+    page = tmp_cfg.sdd_dir / 'device.md'
+    page.write_text(page.read_text(encoding='utf-8') + '\n```mermaid\nflowchart LR\n  ManualA --> ManualB\n```\n', encoding='utf-8')
+    original = page.read_bytes()
+    out = export_site(tmp_cfg)
+    assert (out / 'device.mmd').exists()
+    sections = yaml.safe_load(tmp_cfg.sections_file.read_text(encoding='utf-8'))
+    section = sections['sections'][0]
+    section['diagram'] = {'enabled': policy['enabled']}
+    if 'classes' in policy:
+        section['facts']['classes'] = policy['classes']
+    tmp_cfg.sections_file.write_text(yaml.safe_dump(sections), encoding='utf-8')
+    export_site(tmp_cfg)
+    doc = (out / 'device.html').read_text(encoding='utf-8')
+    assert doc.count('class="mermaid"') == 1
+    assert 'ManualA' in doc
+    assert not (out / 'device.mmd').exists()
+    assert page.read_bytes() == original
+    assert verify_site(out)['broken_links'] == 0
+
+
+def test_existing_generation_without_diagram_opt_in_accepts_large_models(tmp_cfg, sample_model):
+    from sdd.generate import Generator
+    from sdd.llm import Agent
+    for i in range(20):
+        name = f'ExtraClass{i}'
+        sample_model.classes[name] = ClassInfo(name)
+    Generator(tmp_cfg, sample_model, Agent(tmp_cfg.agent)).run(['overview'])
+    assert '<!-- sdd:class-diagram -->' not in (tmp_cfg.sdd_dir / 'overview.md').read_text(encoding='utf-8')

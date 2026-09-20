@@ -115,7 +115,14 @@ def build_site(cfg: Config, out: Path, render, mermaid_src: str | None) -> Path:
             if path.exists() and (not path.is_file() or digest(path) != expected):
                 raise RuntimeError(f"Generated artifact was manually changed: {rel}; preserve/reconcile it before rebuilding")
         for rel in outputs:
-            owned_path(out, rel)
+            target = owned_path(out, rel)
+            if rel not in previous["outputs"] and target.exists():
+                raise RuntimeError(f"Unmanaged artifact would be overwritten: {rel}; preserve/reconcile it before rebuilding")
+            for parent in target.parents:
+                if parent.exists() and not parent.is_dir():
+                    raise RuntimeError(f"Site output parent is not a directory: {parent}")
+                if parent == out:
+                    break
         out.mkdir(parents=True, exist_ok=True)
         for rel in outputs:
             target = owned_path(out, rel)
