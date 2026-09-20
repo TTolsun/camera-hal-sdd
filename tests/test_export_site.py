@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from sdd.export_site import class_diagram, export_site
+from sdd.export_site import export_site
+from sdd.diagrams import class_diagram
 from sdd.facts.model import ClassInfo, Relation
 
 

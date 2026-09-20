@@ -24,6 +24,8 @@ from .config import Config, load
 from .facts.model import KnowledgeModel
 from .generate import Generator
 from .llm import Agent, AgentError
+from .impact_review import review_markdown
+from .source_git import changed_files, resolve_commit
 
 
 def _cfg(args: argparse.Namespace) -> Config:
@@ -85,20 +87,16 @@ def _load_model(cfg: Config) -> KnowledgeModel:
 def cmd_impact(args: argparse.Namespace) -> int:
     cfg = _cfg(args)
     model = _load_model(cfg)
-    def resolve(ref: str) -> str:
-        return subprocess.check_output(["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
-                                       cwd=cfg.source_root, text=True).strip()
-    base, head = resolve(args.base), resolve(args.head)
+    base, head = (resolve_commit(cfg.source_root, ref) for ref in (args.base, args.head))
     if model.meta.get("source_commit") != head:
         raise RuntimeError("현재 facts의 source_commit이 --head와 다릅니다. 대상 커밋에서 extract를 다시 실행하세요.")
     base_model = KnowledgeModel.load(Path(args.base_facts)) if args.base_facts else None
     if base_model and base_model.meta.get("source_commit") != base:
         raise RuntimeError("--base-facts의 source_commit이 --base와 다릅니다.")
-    files = impact_mod.changed_files(cfg.source_root, base, head)
+    files = changed_files(cfg.source_root, base, head)
     report = impact_mod.compute(cfg, model, files, base, head, base_model)
     out = cfg.build_dir / "impact.json"
     report.save(out)
-    from .coverage import review_markdown
     review = cfg.build_dir / "impact-review.md"
     review.write_text(review_markdown(report), encoding="utf-8", newline="\n")
     print(f"변경 파일 {len(files)} 개, 영향 섹션 {sorted(report.sections)}, 시나리오 {sorted(report.scenarios)}")

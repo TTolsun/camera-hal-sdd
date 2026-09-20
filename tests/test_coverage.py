@@ -6,9 +6,10 @@ import pytest
 import yaml
 
 from sdd.cli import main
-from sdd.coverage import review_markdown
+from sdd.impact_review import review_markdown
 from sdd.facts.model import ClassInfo, FunctionInfo, KnowledgeModel, Location, Method
-from sdd.impact import ImpactReport, changed_files, compute
+from sdd.impact import ImpactReport, compute
+from sdd.source_git import changed_files
 
 
 def sections(cfg, values):
@@ -88,6 +89,27 @@ def test_mapped_function_without_regeneration_rule_requires_review(tmp_cfg):
     report = compute(tmp_cfg, model, ['api.cpp'], 'a', 'b')
     assert report.coverage['findings'][0]['reason'] == 'document-not-scheduled'
     assert report.coverage['entities'][0]['sections'] == ['api']
+
+
+def test_cpp_symbol_case_is_consistent_across_impact_coverage_and_diagrams(tmp_cfg):
+    from sdd.diagrams import class_diagram
+    from sdd.matching import matches_symbol
+    sections(tmp_cfg, [{'id': 'api', 'facts': {'classes': ['device']}}])
+    model = KnowledgeModel(classes={'hal::Device': ClassInfo('hal::Device', Location('api.h', 1))})
+    report = compute(tmp_cfg, model, ['api.h'], 'a', 'b')
+    assert not matches_symbol('hal::Device', ['device'])
+    assert matches_symbol('hal::Device', ['Device'])
+    assert report.sections == {}
+    assert report.coverage['findings'][0]['reason'] == 'entity-outside-document-scope'
+    assert class_diagram(model, ['device']) == ''
+
+
+def test_manual_evidence_uses_literal_changed_paths(tmp_cfg):
+    sections(tmp_cfg, [{'id': 'manual', 'kind': 'manual', 'output': 'notes.md'}])
+    tmp_cfg.sdd_dir.mkdir()
+    (tmp_cfg.sdd_dir / 'notes.md').write_text('---\nevidence_files: ["a.cpp"]\n---\n', encoding='utf-8')
+    assert compute(tmp_cfg, KnowledgeModel(), ['*.cpp'], 'a', 'b').sections == {}
+    assert 'manual' in compute(tmp_cfg, KnowledgeModel(), ['a.cpp'], 'a', 'b').sections
 
 
 def test_old_impact_json_remains_readable(tmp_path):

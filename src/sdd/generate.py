@@ -23,6 +23,7 @@ from .config import Config
 from .diagrams import diagram_block, section_diagram
 from .facts.model import ClassInfo, KnowledgeModel, Scenario
 from .impact import ImpactReport
+from .matching import matches_symbol
 from .llm import Agent
 from .validate import Verdict, check, extract_citations, normalize_citations, strip_echo, strip_headings
 
@@ -291,7 +292,7 @@ class Generator:
     def _entrypoint_table(self, pats: list[str]) -> str:
         rows = ["| 함수 | 위치 | 설명 |", "|---|---|---|"]
         for name in sorted(self.model.functions):
-            if not any(fnmatch.fnmatch(name, p) or fnmatch.fnmatch(name.rsplit("::", 1)[-1], p) for p in pats):
+            if not matches_symbol(name, pats):
                 continue
             fn = self.model.functions[name]
             loc = next((l for l in (fn.def_loc, fn.loc) if l), None)
@@ -329,7 +330,7 @@ class Generator:
                         files.add(c.loc.file)
         fn_pats = facts.get("functions") or []
         for name, fn in self.model.functions.items():
-            if any(fnmatch.fnmatch(name, pat) or fnmatch.fnmatch(name.rsplit("::", 1)[-1], pat) for pat in fn_pats):
+            if matches_symbol(name, fn_pats):
                 for l in (fn.def_loc, fn.loc):
                     if l:
                         files.add(l.file)
@@ -465,7 +466,7 @@ def _routes_from_headings(body: str) -> list[tuple[str, str]] | None:
 
 def _match_class(c: ClassInfo, sec: dict[str, Any]) -> bool:
     pats = sec.get("facts", {}).get("classes") or []
-    return any(fnmatch.fnmatch(c.name, p) or fnmatch.fnmatch(c.name.rsplit("::", 1)[-1], p) for p in pats)
+    return matches_symbol(c.name, pats)
 
 
 def _class_table(classes: list[ClassInfo]) -> str:
