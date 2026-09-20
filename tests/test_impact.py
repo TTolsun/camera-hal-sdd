@@ -1,4 +1,5 @@
-from sdd.impact import compute, glob_to_regex, match_any
+from sdd.impact import compute
+from sdd.matching import glob_to_regex, match_any
 
 
 def test_glob_double_star_matches_any_depth():

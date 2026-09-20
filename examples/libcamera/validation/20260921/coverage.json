@@ -1,0 +1,161 @@
+{
+  "base": "0a881d263755d97d912c5fb5302c8de095cd5148",
+  "head": "279d355ef8f7a4f98bb0a3004c0f788387814506",
+  "changed_files": [
+    "src/ipa/ipu3/algorithms/lsc.cpp",
+    "src/ipa/ipu3/algorithms/lsc.h",
+    "src/ipa/ipu3/algorithms/meson.build",
+    "src/ipa/ipu3/ipa_context.cpp",
+    "src/ipa/ipu3/ipa_context.h"
+  ],
+  "impact_sections": [
+    "camera-model",
+    "ipa",
+    "pipeline-handler"
+  ],
+  "baseline_available": true,
+  "status": "needs-review",
+  "findings": [
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPAActiveState",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPAActiveState::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/a/source/src/ipa/ipu3/ipa_context.h:46:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPAActiveState::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/b/source/src/ipa/ipu3/ipa_context.h:47:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPAContext",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPAFrameContext",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPAFrameContext::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/a/source/src/ipa/ipu3/ipa_context.h:59:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPAFrameContext::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/b/source/src/ipa/ipu3/ipa_context.h:61:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPASessionConfiguration",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/a/source/src/ipa/ipu3/ipa_context.h:32:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/a/source/src/ipa/ipu3/ipa_context.h:38:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/b/source/src/ipa/ipu3/ipa_context.h:33:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/b/source/src/ipa/ipu3/ipa_context.h:39:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::algorithms::Lsc",
+      "files": [
+        "src/ipa/ipu3/algorithms/lsc.cpp",
+        "src/ipa/ipu3/algorithms/lsc.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "function",
+      "name": "libcamera::ipa::ipu3::algorithms::logCategoryIPU3Lsc",
+      "files": [
+        "src/ipa/ipu3/algorithms/lsc.cpp"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "function",
+      "name": "libcamera::ipa::ipu3::algorithms::quantize",
+      "files": [
+        "src/ipa/ipu3/algorithms/lsc.cpp"
+      ]
+    },
+    {
+      "reason": "no-extracted-entity",
+      "kind": "file",
+      "name": "src/ipa/ipu3/algorithms/meson.build",
+      "files": [
+        "src/ipa/ipu3/algorithms/meson.build"
+      ]
+    },
+    {
+      "reason": "no-extracted-entity",
+      "kind": "file",
+      "name": "src/ipa/ipu3/ipa_context.cpp",
+      "files": [
+        "src/ipa/ipu3/ipa_context.cpp"
+      ]
+    }
+  ],
+  "lsc_gap_detected": true,
+  "lsc_gap_resolved_by_explicit_section": true,
+  "other_findings_preserved": true,
+  "strict_exit_code": 2
+}

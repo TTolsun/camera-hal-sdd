@@ -7,15 +7,15 @@
 
 from __future__ import annotations
 
-import fnmatch
 import json
-import re
-import subprocess
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .config import Config
+from .coverage import audit
+from .document_metadata import manual_evidence_files
+from .matching import match_any, matches_symbol
 from .facts.model import KnowledgeModel
 
 
@@ -28,6 +28,7 @@ class ImpactReport:
     sections: dict[str, list[str]] = field(default_factory=dict)     # section id -> 이유
     scenarios: dict[str, list[str]] = field(default_factory=dict)    # scenario id -> 이유
     packages: list[str] = field(default_factory=list)
+    coverage: dict[str, Any] = field(default_factory=dict)
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -38,45 +39,13 @@ class ImpactReport:
         return cls(**json.loads(path.read_text(encoding="utf-8")))
 
 
-def glob_to_regex(pattern: str) -> re.Pattern[str]:
-    """`**/` 는 0개 이상의 디렉터리, `*` 는 슬래시를 넘지 않는 glob 을 정규식으로 바꾼다."""
-    out = ""
-    i = 0
-    while i < len(pattern):
-        c = pattern[i]
-        if pattern.startswith("**/", i):
-            out += "(?:.*/)?"
-            i += 3
-            continue
-        if pattern.startswith("**", i):
-            out += ".*"
-            i += 2
-            continue
-        if c == "*":
-            out += "[^/]*"
-        elif c == "?":
-            out += "[^/]"
-        else:
-            out += re.escape(c)
-        i += 1
-    return re.compile("^" + out + "$")
-
-
-def match_any(path: str, globs: list[str]) -> bool:
-    return any(glob_to_regex(g).match(path) for g in globs)
-
-
-def changed_files(source_root: Path, base: str, head: str = "HEAD") -> list[str]:
-    # --relative: 소스 루트가 저장소의 하위 디렉터리여도 facts 의 file 과 같은 기준(소스 루트 상대)이 된다.
-    res = subprocess.run(["git", "diff", "--name-only", "--relative", f"{base}..{head}"], cwd=source_root,
-                         check=True, capture_output=True, text=True)
-    return [line.strip().replace("\\", "/") for line in res.stdout.splitlines() if line.strip()]
-
-
-def compute(cfg: Config, model: KnowledgeModel, files: list[str], base: str, head: str) -> ImpactReport:
+def compute(cfg: Config, model: KnowledgeModel, files: list[str], base: str, head: str,
+            base_model: KnowledgeModel | None = None) -> ImpactReport:
     report = ImpactReport(base=base, head=head, changed_files=files)
     fileset = set(files)
     sections = cfg.sections()
+    manual_evidence = {s["id"]: manual_evidence_files(cfg.sdd_dir / s.get("output", f"{s['id']}.md"))
+                       for s in sections if s.get("kind") == "manual"}
 
     # 1. 경로 규칙
     for sec in sections:
@@ -94,7 +63,7 @@ def compute(cfg: Config, model: KnowledgeModel, files: list[str], base: str, hea
         patterns = facts.get("impact_classes", facts.get("classes")) or []
         if not patterns:
             continue
-        hit = [c.name for c in changed_classes if any(fnmatch.fnmatch(c.name, p) for p in patterns)]
+        hit = [c.name for c in changed_classes if matches_symbol(c.name, patterns)]
         if hit:
             report.sections.setdefault(sec["id"], []).append(f"클래스 변경: {', '.join(hit[:5])}")
 
@@ -107,28 +76,14 @@ def compute(cfg: Config, model: KnowledgeModel, files: list[str], base: str, hea
     for sec in sections:
         if sec.get("kind") != "manual":
             continue
-        evidence = manual_evidence_files(cfg.sdd_dir / sec.get("output", f"{sec['id']}.md"))
-        hit = sorted(f for f in evidence if f in fileset or any(match_any(f, [c]) for c in files))
+        evidence = manual_evidence[sec["id"]]
+        hit = sorted(fileset.intersection(evidence))
         if hit:
             report.sections.setdefault(sec["id"], []).append(f"수동 문서의 근거 파일 변경: {', '.join(hit[:5])} (사람이 재검토)")
 
+    report.coverage = audit(model, files, base_model, sections=sections, excluded=cfg.exclude,
+                            manual_evidence=manual_evidence, impacted_sections=set(report.sections))
     return report
-
-
-def manual_evidence_files(path: Path) -> list[str]:
-    """manual 문서 frontmatter 의 evidence_files 목록. 없으면 빈 목록."""
-    if not path.exists():
-        return []
-    text = path.read_text(encoding="utf-8")
-    m = re.match(r"^---\n(.*?)\n---\n", text, re.S)
-    if not m:
-        return []
-    try:
-        import yaml
-        data = yaml.safe_load(m.group(1)) or {}
-    except Exception:
-        return []
-    return [str(f).replace("\\", "/") for f in (data.get("evidence_files") or [])]
 
 
 def summary_facts(report: ImpactReport, model: KnowledgeModel) -> str:
@@ -143,4 +98,9 @@ def summary_facts(report: ImpactReport, model: KnowledgeModel) -> str:
     if report.scenarios:
         lines.append("- 영향 받는 시나리오: " + ", ".join(sorted(report.scenarios)))
     lines.append("- 재생성된 SDD 섹션: " + ", ".join(sorted(report.sections)) if report.sections else "- 재생성된 섹션 없음")
+    if report.coverage:
+        lines.append(f"- 문서 범위 검사: {report.coverage['status']} (설명 정확성이나 승인 판정이 아님)")
+        for item in report.coverage["findings"][:30]:
+            lines.append(f"  - 검토 필요: {item['name']} ({item['reason']})")
+        lines.append(f"- 전체 범위 검토 {len(report.coverage['findings'])}개는 build/impact-review.md에서 확인")
     return "\n".join(lines)
