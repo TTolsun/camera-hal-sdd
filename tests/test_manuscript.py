@@ -39,6 +39,18 @@ def test_dialogue_and_prompt_leak_are_rejected():
 def test_paths_and_json_residue_are_rejected():
     assert [f.rule for f in lint("자세한 내용은 file://server/doc 에 있습니다.")] == ["절대 경로·줄 번호 링크"]
     assert [f.rule for f in lint("구현은 CameraDevice.cpp#L12 에 있습니다.")] == ["절대 경로·줄 번호 링크"]
+    # Unix 절대 경로와 UNC 경로도 잡는다. 백틱 안이나 특수 문자로 시작하는 성분도 마찬가지다.
+    assert [f.rule for f in lint("로그는 /var/log/camera 에 남습니다.")] == ["절대 경로·줄 번호 링크"]
+    assert [f.rule for f in lint("원본은 `/tmp/CameraDevice.cpp:12` 에 있습니다.")] == ["절대 경로·줄 번호 링크"]
+    assert [f.rule for f in lint("홈 로그는 /~user/log 에 남습니다.")] == ["절대 경로·줄 번호 링크"]
+    assert [f.rule for f in lint("설정은 /日本語/구성 아래에 있습니다.")] == ["절대 경로·줄 번호 링크"]
+    assert [f.rule for f in lint("공유 폴더 \\\\build-server\\out 을 사용합니다.")] == ["절대 경로·줄 번호 링크"]
+    assert [f.rule for f in lint("공유 폴더 \\\\-build\\out 을 사용합니다.")] == ["절대 경로·줄 번호 링크"]
+    # 상대 경로 인용, 산술식의 빗금, C++ 주석 표기는 위반이 아니다.
+    assert lint("비율은 3 / 4 입니다 `device/CameraDevice.h:12`.") == []
+    assert lint("비율은 3 /4 로 계산합니다 `device/CameraDevice.h:12`.") == []
+    assert lint("주석은 `//` 로 시작합니다 `device/CameraDevice.h:12`.") == []
+    assert lint("인라인 주석은 // 기호로 시작합니다 `device/CameraDevice.h:12`.") == []
     assert [f.rule for f in lint('스레드 설명입니다."}')] == ["JSON 잔여물"]
     assert [f.rule for f in lint("첫 줄\\n둘째 줄입니다.")] == ["JSON 잔여물"]
     # 인라인 코드 안의 \n 과 상대 경로 인용은 위반이 아니다.
