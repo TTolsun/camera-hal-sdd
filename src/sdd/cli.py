@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 from . import compdb, extract, impact as impact_mod
+from .carryover import carry_forward
 from .config import Config, load
 from .facts.model import KnowledgeModel
 from .generate import Generator
@@ -124,6 +125,14 @@ def cmd_generate(args: argparse.Namespace) -> int:
     written = gen.run(section_ids=args.sections.split(",") if args.sections else None, impact=report)
     for w in written:
         print(f"-> {w.relative_to(cfg.root).as_posix()}")
+    if report:
+        # 영향 밖 원고는 LLM 없이 근거만 재검증해 새 커밋으로 이월한다. 어긋난 원고는 승격하지 않는다.
+        promoted, stale = carry_forward(cfg, model, written)
+        for pth in promoted:
+            print(f"== {pth.relative_to(cfg.root).as_posix()} (영향 없음: 근거 재검증 후 커밋 이월)")
+        for pth, invalid in stale:
+            print(f"경고: {pth.relative_to(cfg.root).as_posix()} 의 인용 {len(invalid)}개가 새 facts 에 없습니다"
+                  f" ({', '.join(invalid[:3])}). 이 섹션을 다시 생성해야 사이트를 게시할 수 있습니다.")
     if report and cfg.agent.kind != "dry-run":
         summary = agent.chat((cfg.prompts_dir / "system.md").read_text(encoding="utf-8"),
                              (cfg.prompts_dir / "change_impact.md").read_text(encoding="utf-8")

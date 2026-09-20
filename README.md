@@ -59,7 +59,7 @@ uv run sdd impact --base <이전-커밋> --base-facts <이전-facts.json> --fail
 
 `build/impact.json`과 `build/impact-review.md`를 확인합니다. `watch`가 일치해도 해당 클래스를 선택하는 문서가 없으면 검토 항목이 남습니다. 엄격 옵션은 보고서를 기록하고 종료 코드 2로 중단합니다. 이전 facts를 생략하면 삭제된 심볼 검사가 제한됩니다.
 
-범위를 검토·보완한 뒤 `generate --from-impact`로 선택된 섹션을 생성할 수 있습니다. 현재 사이트 빌드는 facts와 원고의 기준 커밋이 달라지면 중단하므로, 새 커밋으로 사이트를 만들 때는 전체 생성이 필요할 수 있습니다.
+범위를 검토·보완한 뒤 `generate --from-impact`로 선택된 섹션을 생성할 수 있습니다. 영향 밖의 원고는 LLM을 부르지 않고 인용을 새 facts로 재검증한 뒤 기준 커밋을 이월하므로, 재검증까지 통과하면 전체 재생성 없이 사이트를 만들 수 있습니다. 인용이 어긋난 원고는 이월하지 않고 재생성 대상으로 보고합니다. per-package 페이지는 영향 밖 패키지의 기존 절을 지우지 않고 같은 방식으로 이월합니다.
 
 ```bash
 uv run sdd generate
