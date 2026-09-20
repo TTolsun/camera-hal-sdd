@@ -20,7 +20,7 @@ _MAX_USAGES_PER_DEFINE = 20
 
 
 def _source_files(root: Path, exclude: list[str] = ()):
-    from ..impact import match_any
+    from ..matching import match_any
 
     for p in root.rglob("*"):
         if p.suffix.lower() not in _SRC_SUFFIXES:

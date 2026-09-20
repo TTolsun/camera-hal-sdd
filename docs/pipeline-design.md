@@ -10,20 +10,14 @@
 
 | 제약 | 결정 |
 |---|---|
-| 코드가 사내 밖으로 나가면 안 됨 | 외부 SaaS(Devin Wiki, Driver 등) 제외. LLM 은 사내 Ollama(Qwen, Hermes) 또는 사내 openai-compatible 게이트웨이만 지원. |
+| 코드가 사내 밖으로 나가면 안 됨 | 운영자는 승인된 사내 Ollama 또는 openai-compatible 엔드포인트를 지정해야 합니다. 생성기 설정만으로 외부 연결을 차단하지는 않습니다. |
 | 운영 모델이 소형(Qwen 3.5 4B 급) | 파일 전체를 넘기지 않음. 결정적 사실 추출이 무거운 일을 하고, LLM 은 섹션 하나 분량의 사실만 받아 짧은 서술을 씀. 입력 예산 초과분은 사실 블록 단위로 제외하고 기록. |
-| 개발 시 NDK-build, 릴리스는 AOSP 빌드 | compile DB 는 `ndk-build compile_commands.json` 에서 얻음. NDK 구성 하나만 문서에 반영되고, AOSP 전용 `-D` 는 한계로 명시. |
+| 프로젝트마다 빌드 구성이 다름 | 해당 구성의 compile DB를 사용합니다. 기본 HAL 예제는 NDK-build, 공개 libcamera 검증은 Meson을 사용하며 한 구성의 분석으로 다른 구성까지 검증되었다고 보지 않습니다. |
 | C++ (#ifdef, factory, virtual, HAL3 콜백) | LLM 이 C++ 구조를 추론하지 않게 함. 구조는 Clang(clang-uml + libclang) 이 읽고, 정적으로 끊기는 호출은 "확인 필요" 로 표시. |
 
-## 3. 왜 완제품(DeepWiki 류)을 쓰지 않는가
+## 3. 구성 요소를 직접 연결하는 이유
 
-2026년 9월 기준으로 조사한 결과입니다.
-
-- CodeWiki(1.7k★)는 `--update --compare-to` 로 증분 갱신이 되지만 tree-sitter 기반이라 C/C++ 정확도가 DeepWiki 보다 낮고(53.24% 대 56.39%), 논문에서도 C/C++ 를 약점으로 인정합니다. Clang 사실을 주입하려면 내부를 고쳐야 합니다.
-- OpenDeepWiki(3.6k★), deepwiki-open 은 LLM 에이전트가 파일을 직접 읽는 구조라 소형 모델과 C++ 에서 환각을 막을 장치가 없습니다.
-- RepoWiki(272★)는 심볼 사전 인덱싱을 하지만 C++ 처리 방식이 공개되어 있지 않습니다.
-
-이들은 "repo 주소만 넣으면 위키가 나오는" UX 가 목적이고, 우리 목적은 리뷰를 거쳐 docs 저장소에 들어가는 SDD 입니다. UX 보다 사실 정확도와 리뷰 흐름이 우선이므로 부품(clang-uml, libclang)을 직접 조립했습니다.
+컴파일 구성에 맞는 C++ 분석, 코드 근거 추적과 사람의 검토 절차를 직접 통제하기 위해 Clang 추출기와 설명 생성기를 분리합니다. 외부 제품의 인기 지표나 출처가 보존되지 않은 정확도 수치는 설계 판단의 근거로 사용하지 않습니다. 현재 구현의 책임과 의존 방향은 [코드 구조](code-structure.md)에 기록합니다.
 
 ## 4. 왜 Doxygen 을 쓰지 않는가
 

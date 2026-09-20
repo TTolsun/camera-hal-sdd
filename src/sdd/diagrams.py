@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import fnmatch
 import html
 
 from .config import Config
+from .matching import matches_symbol
 from .facts.model import KnowledgeModel
 
 POLICY_VERSION = 1
 
 def class_diagram(model: KnowledgeModel, patterns: list[str], limit: int = 16, direction: str = "LR", strip_namespace: str = "") -> str:
     """Only declared classes and extracted edges; no inferred call ordering."""
-    selected = {n for n in model.classes if any(fnmatch.fnmatchcase(n, p) or fnmatch.fnmatchcase(n.rsplit("::", 1)[-1], p) for p in patterns)}
+    selected = {n for n in model.classes if matches_symbol(n, patterns)}
     if not selected:
         return ""
     if direction not in ("LR", "TB", "RL", "BT") or limit < 1:

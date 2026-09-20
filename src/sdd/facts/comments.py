@@ -96,7 +96,7 @@ _UNDER_CACHE: dict[str, bool] = {}
 
 
 def set_excludes(patterns: list[str]) -> None:
-    from ..impact import glob_to_regex
+    from ..matching import glob_to_regex
 
     _EXCLUDES[:] = [glob_to_regex(p) for p in patterns]
     _UNDER_CACHE.clear()

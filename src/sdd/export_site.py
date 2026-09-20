@@ -13,7 +13,7 @@ from urllib.parse import quote, urlsplit
 import markdown
 
 from .config import Config
-from .diagrams import class_diagram, section_diagram, diagram_block
+from .diagrams import section_diagram, diagram_block
 from .export_html import _mermaid_fence, _nav_entries, _split, _title_of_text
 from .facts.model import KnowledgeModel
 

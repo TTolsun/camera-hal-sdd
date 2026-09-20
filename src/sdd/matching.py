@@ -1,0 +1,36 @@
+"""Shared path globs and case-sensitive C++ symbol selection; no I/O."""
+
+import fnmatch
+import re
+
+
+def matches_symbol(name: str, patterns: list[str]) -> bool:
+    return any(fnmatch.fnmatchcase(name, p) or fnmatch.fnmatchcase(name.rsplit("::", 1)[-1], p) for p in patterns)
+
+
+def glob_to_regex(pattern: str) -> re.Pattern[str]:
+    """`**/` 는 0개 이상의 디렉터리, `*` 는 슬래시를 넘지 않는 glob 을 정규식으로 바꾼다."""
+    out = ""
+    i = 0
+    while i < len(pattern):
+        c = pattern[i]
+        if pattern.startswith("**/", i):
+            out += "(?:.*/)?"
+            i += 3
+            continue
+        if pattern.startswith("**", i):
+            out += ".*"
+            i += 2
+            continue
+        if c == "*":
+            out += "[^/]*"
+        elif c == "?":
+            out += "[^/]"
+        else:
+            out += re.escape(c)
+        i += 1
+    return re.compile("^" + out + "$")
+
+
+def match_any(path: str, globs: list[str]) -> bool:
+    return any(glob_to_regex(g).match(path) for g in globs)
