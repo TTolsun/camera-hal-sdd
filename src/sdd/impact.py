@@ -28,6 +28,7 @@ class ImpactReport:
     sections: dict[str, list[str]] = field(default_factory=dict)     # section id -> 이유
     scenarios: dict[str, list[str]] = field(default_factory=dict)    # scenario id -> 이유
     packages: list[str] = field(default_factory=list)
+    coverage: dict[str, Any] = field(default_factory=dict)
 
     def save(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -68,12 +69,13 @@ def match_any(path: str, globs: list[str]) -> bool:
 
 def changed_files(source_root: Path, base: str, head: str = "HEAD") -> list[str]:
     # --relative: 소스 루트가 저장소의 하위 디렉터리여도 facts 의 file 과 같은 기준(소스 루트 상대)이 된다.
-    res = subprocess.run(["git", "diff", "--name-only", "--relative", f"{base}..{head}"], cwd=source_root,
-                         check=True, capture_output=True, text=True)
-    return [line.strip().replace("\\", "/") for line in res.stdout.splitlines() if line.strip()]
+    res = subprocess.run(["git", "diff", "--name-only", "-z", "--no-renames", "--relative", f"{base}..{head}", "--"], cwd=source_root,
+                         check=True, capture_output=True, encoding="utf-8")
+    return sorted(set(path for path in res.stdout.split("\0") if path))
 
 
-def compute(cfg: Config, model: KnowledgeModel, files: list[str], base: str, head: str) -> ImpactReport:
+def compute(cfg: Config, model: KnowledgeModel, files: list[str], base: str, head: str,
+            base_model: KnowledgeModel | None = None) -> ImpactReport:
     report = ImpactReport(base=base, head=head, changed_files=files)
     fileset = set(files)
     sections = cfg.sections()
@@ -94,7 +96,7 @@ def compute(cfg: Config, model: KnowledgeModel, files: list[str], base: str, hea
         patterns = facts.get("impact_classes", facts.get("classes")) or []
         if not patterns:
             continue
-        hit = [c.name for c in changed_classes if any(fnmatch.fnmatch(c.name, p) for p in patterns)]
+        hit = [c.name for c in changed_classes if any(fnmatch.fnmatch(c.name, p) or fnmatch.fnmatch(c.name.rsplit("::", 1)[-1], p) for p in patterns)]
         if hit:
             report.sections.setdefault(sec["id"], []).append(f"클래스 변경: {', '.join(hit[:5])}")
 
@@ -112,6 +114,8 @@ def compute(cfg: Config, model: KnowledgeModel, files: list[str], base: str, hea
         if hit:
             report.sections.setdefault(sec["id"], []).append(f"수동 문서의 근거 파일 변경: {', '.join(hit[:5])} (사람이 재검토)")
 
+    from .coverage import audit
+    report.coverage = audit(cfg, model, files, base_model, impacted_sections=set(report.sections))
     return report
 
 
@@ -143,4 +147,9 @@ def summary_facts(report: ImpactReport, model: KnowledgeModel) -> str:
     if report.scenarios:
         lines.append("- 영향 받는 시나리오: " + ", ".join(sorted(report.scenarios)))
     lines.append("- 재생성된 SDD 섹션: " + ", ".join(sorted(report.sections)) if report.sections else "- 재생성된 섹션 없음")
+    if report.coverage:
+        lines.append(f"- 문서 범위 검사: {report.coverage['status']} (설명 정확성이나 승인 판정이 아님)")
+        for item in report.coverage["findings"][:30]:
+            lines.append(f"  - 검토 필요: {item['name']} ({item['reason']})")
+        lines.append(f"- 전체 범위 검토 {len(report.coverage['findings'])}개는 build/impact-review.md에서 확인")
     return "\n".join(lines)

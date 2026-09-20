@@ -51,6 +51,8 @@ LLM (사내 Ollama 의 Qwen / Hermes, 또는 openai-compatible 게이트웨이)
 docs 저장소 Gerrit change → 사람 리뷰 → merge → mkdocs 게시
 ```
 
+`sdd impact`는 변경된 클래스·함수가 문서 범위에서 빠졌는지도 검사합니다. `build/impact-review.md`에 검토 항목을 남기며, `--fail-on-coverage-gap`을 주면 문서 생성 전에 중단할 수 있습니다. [문서 범위 검사와 사용법](docs/document-coverage.md)을 확인하세요.
+
 ## 준비물
 
 | 항목 | 이유 |

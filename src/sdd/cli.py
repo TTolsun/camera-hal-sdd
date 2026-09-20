@@ -85,13 +85,28 @@ def _load_model(cfg: Config) -> KnowledgeModel:
 def cmd_impact(args: argparse.Namespace) -> int:
     cfg = _cfg(args)
     model = _load_model(cfg)
-    files = impact_mod.changed_files(cfg.source_root, args.base, args.head)
-    report = impact_mod.compute(cfg, model, files, args.base, args.head)
+    def resolve(ref: str) -> str:
+        return subprocess.check_output(["git", "rev-parse", "--verify", f"{ref}^{{commit}}"],
+                                       cwd=cfg.source_root, text=True).strip()
+    base, head = resolve(args.base), resolve(args.head)
+    if model.meta.get("source_commit") != head:
+        raise RuntimeError("현재 facts의 source_commit이 --head와 다릅니다. 대상 커밋에서 extract를 다시 실행하세요.")
+    base_model = KnowledgeModel.load(Path(args.base_facts)) if args.base_facts else None
+    if base_model and base_model.meta.get("source_commit") != base:
+        raise RuntimeError("--base-facts의 source_commit이 --base와 다릅니다.")
+    files = impact_mod.changed_files(cfg.source_root, base, head)
+    report = impact_mod.compute(cfg, model, files, base, head, base_model)
     out = cfg.build_dir / "impact.json"
     report.save(out)
+    from .coverage import review_markdown
+    review = cfg.build_dir / "impact-review.md"
+    review.write_text(review_markdown(report), encoding="utf-8", newline="\n")
     print(f"변경 파일 {len(files)} 개, 영향 섹션 {sorted(report.sections)}, 시나리오 {sorted(report.scenarios)}")
     print(f"-> {out}")
-    return 0
+    print(f"문서 범위: {report.coverage['status']}, 검토 항목 {len(report.coverage['findings'])}개 -> {review}")
+    if not base_model:
+        print("이전 facts 미제공: 삭제된 심볼의 범위 검사는 제한됩니다. --base-facts를 사용할 수 있습니다.")
+    return 2 if args.fail_on_coverage_gap and report.coverage["findings"] else 0
 
 
 def cmd_generate(args: argparse.Namespace) -> int:
@@ -104,6 +119,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
             print("build/impact.json 이 없습니다. 먼저 `sdd impact --base <ref>` 를 실행하세요.", file=sys.stderr)
             return 2
         report = impact_mod.ImpactReport.load(p)
+        if report.coverage.get("findings"):
+            print(f"문서 범위 검토 {len(report.coverage['findings'])}개가 남아 있습니다. build/impact-review.md를 확인하세요.")
     agent = Agent(cfg.agent, dump_dir=cfg.build_dir / "prompts")
     gen = Generator(cfg, model, agent)
     written = gen.run(section_ids=args.sections.split(",") if args.sections else None, impact=report)
@@ -193,6 +210,8 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("impact")
     s.add_argument("--base", required=True, help="비교 기준 commit/ref (예: HEAD~1, origin/main)")
     s.add_argument("--head", default="HEAD")
+    s.add_argument("--base-facts", help="삭제·이름 변경 검토에 사용할 이전 커밋의 facts.json")
+    s.add_argument("--fail-on-coverage-gap", action="store_true", help="범위 검토 항목을 기록한 뒤 종료 코드 2로 중단")
     s.set_defaults(fn=cmd_impact)
 
     s = sub.add_parser("generate")
@@ -203,6 +222,8 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("run")
     s.add_argument("--base", help="주면 impact 기반으로 영향 섹션만, 없으면 전체 생성")
     s.add_argument("--head", default="HEAD")
+    s.add_argument("--base-facts", help="이전 커밋의 facts.json")
+    s.add_argument("--fail-on-coverage-gap", action="store_true", help="범위 검토 항목이 있으면 생성 전에 중단")
     s.add_argument("--skip-comments", action="store_true")
     s.add_argument("--skip-clang-uml", action="store_true")
     s.add_argument("--only", default=None)
@@ -229,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
     s.set_defaults(fn=cmd_export_html)
 
     args = p.parse_args(argv)
+    if args.cmd == "run" and not args.base and (args.base_facts or args.fail_on_coverage_gap):
+        p.error("run의 --base-facts와 --fail-on-coverage-gap에는 --base가 필요합니다.")
     try:
         return int(args.fn(args))
     except (AgentError, FileNotFoundError, RuntimeError, subprocess.CalledProcessError) as e:
