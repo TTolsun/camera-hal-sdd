@@ -83,6 +83,8 @@ uv run sdd --config examples/mini-hal/sdd.yaml run     # extract + generate (Oll
 
 Mermaid는 공통 생성 규칙으로 Markdown을 만들 때마다 갱신합니다. `site.enabled: true`이면 `generate`와 `run`이 사이트 빌드까지 수행합니다. 빌드는 내부 링크를 검사하고 입력·출력 해시를 기록하며, 직전 빌드에서 관리한 오래된 파일만 정리합니다. `sdd verify-site`로 결과를 다시 검사할 수 있습니다. 유지보수 시 [디자인 계약](DESIGN.md)과 회귀 테스트를 함께 갱신하세요.
 
+[두 실제 libcamera 커밋의 비교 검증](docs/libcamera-revision-validation.md)에서는 구조 추출과 Mermaid 변경을 확인했습니다. 문서 범위 누락과 LLM의 관계 설명 오류도 발견했으므로, 현재 결과는 무인 게시 승인 기준을 충족하지 않습니다.
+
 ```bash
 uv sync --extra dev
 uv run sdd doctor            # 도구, compile DB, LLM 도달 여부 점검

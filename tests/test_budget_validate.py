@@ -30,6 +30,15 @@ def test_unknown_citation_fails():
     assert v.invalid == ["device/Nope.cpp:1"]
 
 
+def test_malformed_namespace_citation_cannot_hide_beside_valid_citations():
+    # Reproduced by the real libcamera two-revision experiment (IPU3 LSC probe).
+    text = ("처리 상태 클래스는 `libcamera::ipa::lsc.h:27` 에 선언되어 있다고 설명합니다. "
+            "다른 정상 인용인 `src/ipa/libipa/lsc.h:85` 를 함께 사용해도 잘못된 경로를 거절해야 합니다.")
+    verdict = check(text, {"src/ipa/libipa/lsc.h:27", "src/ipa/libipa/lsc.h:85"})
+    assert not verdict.ok
+    assert verdict.invalid == ["libcamera::ipa::lsc.h:27"]
+
+
 def test_missing_citation_fails_when_required():
     v = check("클래스 설명만 있고 인용이 없습니다.", {"x.cpp:1"}, require=True)
     assert not v.ok

@@ -5,7 +5,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-_CITE = re.compile(r"`([A-Za-z0-9_./\\-]+\.(?:cpp|cc|c|h|hpp|mk)):(\d+)`")
+# Capture the whole citation-shaped token, including malformed namespace/URL prefixes.
+# A narrow path alphabet silently ignored invalid citations mixed with valid ones.
+_CITE = re.compile(r"`([^`\s]+\.(?:cpp|cc|c|h|hpp|mk)):(\d+)`")
 _CLAIM_WORDS = ("클래스", "함수", "호출", "메서드", "플래그", "상속", "생성", "반환")
 
 

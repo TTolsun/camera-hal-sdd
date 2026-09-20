@@ -1,0 +1,363 @@
+{
+  "review_result": "partial-pass; prose semantic accuracy failed",
+  "date_kst": "2026-09-21",
+  "generator_base_commit": "bec652f",
+  "model": {
+    "models": [
+      {
+        "name": "qwen3.5:4b",
+        "model": "qwen3.5:4b",
+        "modified_at": "2026-09-04T19:43:28.4151894+09:00",
+        "size": 3389983735,
+        "digest": "2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd",
+        "details": {
+          "parent_model": "",
+          "format": "gguf",
+          "family": "qwen35",
+          "families": [
+            "qwen35"
+          ],
+          "parameter_size": "4.7B",
+          "quantization_level": "Q4_K_M",
+          "context_length": 262144,
+          "embedding_length": 2560
+        },
+        "capabilities": [
+          "completion",
+          "vision",
+          "tools",
+          "thinking"
+        ]
+      }
+    ]
+  },
+  "temperature": 0,
+  "runs": [
+    {
+      "revision": "a",
+      "source_commit": "0a881d263755d97d912c5fb5302c8de095cd5148",
+      "build_ok": true,
+      "translation_units": 170,
+      "parse_errors": 0,
+      "classes": 1004,
+      "functions": 427,
+      "citations": 4810,
+      "files": 329,
+      "facts_verified": true,
+      "seconds": 347.23,
+      "facts_sha256": "4938ac653daa9edf05dbaacffddb596411ace4c81a544f0f5b9261b46e1a31fd"
+    },
+    {
+      "revision": "b",
+      "source_commit": "279d355ef8f7a4f98bb0a3004c0f788387814506",
+      "build_ok": true,
+      "translation_units": 171,
+      "parse_errors": 0,
+      "classes": 1005,
+      "functions": 429,
+      "citations": 4825,
+      "files": 331,
+      "facts_verified": true,
+      "seconds": 350.03,
+      "facts_sha256": "e58b4b5ff9560881bc8137adc31bad51b377970d0f4d204b29264913bf5cade1"
+    }
+  ],
+  "comparison": {
+    "base": "0a881d263755d97d912c5fb5302c8de095cd5148",
+    "head": "279d355ef8f7a4f98bb0a3004c0f788387814506",
+    "classes_added": [
+      "libcamera::ipa::ipu3::IPAActiveState::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:47:2)",
+      "libcamera::ipa::ipu3::IPAFrameContext::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:61:2)",
+      "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:33:2)",
+      "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:39:2)",
+      "libcamera::ipa::ipu3::algorithms::Lsc"
+    ],
+    "classes_removed": [
+      "libcamera::ipa::ipu3::IPAActiveState::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:46:2)",
+      "libcamera::ipa::ipu3::IPAFrameContext::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:59:2)",
+      "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:32:2)",
+      "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:38:2)"
+    ],
+    "classes_structurally_changed": [],
+    "relations_added": [
+      [
+        "libcamera::ipa::ipu3::IPAActiveState",
+        "association",
+        "libcamera::ipa::ipu3::IPAActiveState::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:47:2)"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPAActiveState",
+        "association",
+        "libcamera::ipa::lsc::ActiveState"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPAFrameContext",
+        "association",
+        "libcamera::ipa::ipu3::IPAFrameContext::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:61:2)"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPAFrameContext",
+        "association",
+        "libcamera::ipa::lsc::FrameContext"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPASessionConfiguration",
+        "association",
+        "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:33:2)"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPASessionConfiguration",
+        "association",
+        "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:39:2)"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:33:2)",
+        "association",
+        "ipu3_uapi_grid_config"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:33:2)",
+        "association",
+        "libcamera::Size"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:39:2)",
+        "association",
+        "ipu3_uapi_grid_config"
+      ],
+      [
+        "libcamera::ipa::ipu3::algorithms::Lsc",
+        "association",
+        "libcamera::ipa::LscAlgorithm"
+      ],
+      [
+        "libcamera::ipa::ipu3::algorithms::Lsc",
+        "inheritance",
+        "libcamera::ipa::ipu3::Algorithm"
+      ]
+    ],
+    "relations_removed": [
+      [
+        "libcamera::ipa::ipu3::IPAActiveState",
+        "association",
+        "libcamera::ipa::ipu3::IPAActiveState::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:46:2)"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPAFrameContext",
+        "association",
+        "libcamera::ipa::ipu3::IPAFrameContext::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:59:2)"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPASessionConfiguration",
+        "association",
+        "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:32:2)"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPASessionConfiguration",
+        "association",
+        "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:38:2)"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:32:2)",
+        "association",
+        "ipu3_uapi_grid_config"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:32:2)",
+        "association",
+        "libcamera::Size"
+      ],
+      [
+        "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at $SOURCE/src/ipa/ipu3/ipa_context.h:38:2)",
+        "association",
+        "ipu3_uapi_grid_config"
+      ]
+    ],
+    "pages": [
+      {
+        "section": "camera-model",
+        "diagram_changed": false,
+        "body_changed": true,
+        "prose_changed": false,
+        "prose": [
+          "카메라 탐색과 요청 처리는 `libcamera::CameraManager`와 `libcamera::Camera` 클래스로 나뉘며, 카메라 생성은 `CameraManager()` 정의를 먼저 확인합니다 `src/libcamera/camera_manager.cpp:306`. `Camera` 인스턴스는 `create()`를 통해 생성되며 `id()`나 `acquire()`를 호출하여 장치 정보를 조회하거나 독점 액세스를 획득합니다.\n\n요청 처리는 `libcamera::Request` 클래스에서 수행되며 `createRequest()`를 통해 요청 객체를 생성하고 `queueRequest()`로 카메라에 대기열을 제출합니다. 정적으로 확인되지 않는 실행 경계는 스레드 간 콜백 전달 순서와 내부 동기화 로직으로, 해당 설계 의도는 현재 문서에 근거가 부족하여 확인 필요: 확인할 항목으로 남깁니다.",
+          "카메라 탐색과 요청 처리는 `libcamera::CameraManager`와 `libcamera::Camera` 클래스로 나뉘며, 카메라 생성은 `CameraManager()` 정의를 먼저 확인합니다 `src/libcamera/camera_manager.cpp:306`. `Camera` 인스턴스는 `create()`를 통해 생성되며 `id()`나 `acquire()`를 호출하여 장치 정보를 조회하거나 독점 액세스를 획득합니다.\n\n요청 처리는 `libcamera::Request` 클래스에서 수행되며 `createRequest()`를 통해 요청 객체를 생성하고 `queueRequest()`로 카메라에 대기열을 제출합니다. 정적으로 확인되지 않는 실행 경계는 스레드 간 콜백 전달 순서와 내부 동기화 로직으로, 해당 설계 의도는 현재 문서에 근거가 부족하여 확인 필요: 확인할 항목으로 남깁니다."
+        ],
+        "status": [
+          "ok",
+          "ok"
+        ],
+        "facts_omitted": [
+          [],
+          []
+        ],
+        "diagram_sha256": [
+          "82f7e955e7fa1c3a6184c155282dfcfd69f13ffcf727844997cbbac0816ce2ea",
+          "82f7e955e7fa1c3a6184c155282dfcfd69f13ffcf727844997cbbac0816ce2ea"
+        ]
+      },
+      {
+        "section": "pipeline-handler",
+        "diagram_changed": false,
+        "body_changed": true,
+        "prose_changed": false,
+        "prose": [
+          "PipelineHandler 클래스는 libcamera::Object 를 상속받으며, PipelineHandlerFactoryBase 와 PipelineHandlerFactory 를 통해 하드웨어별 구현 (예: IPU3, RKISP1) 이 등록됩니다 `class libcamera::PipelineHandler`의 정의를 먼저 확인합니다 `include/libcamera/internal/pipeline_handler.h:34`. 설정과 요청 전달을 위한 핵심 메서드는 `generateConfiguration()`, `configure()`, `exportFrameBuffers()`, `start()` 및 `stop()` 으로, 각 하드웨어 구현 클래스 (예: `PipelineHandlerIPU3`) 에서 재정의됩니다 `src/libcamera/pipeline/ipu3/ipu3.cpp:393`~`src/libcamera/pipeline/ipu3/ipu3.cpp:721`.\n\nFactory 패턴을 통해 특정 이름의 핸들러 인스턴스를 생성할 수 있으며, `PipelineHandlerFactoryBase::create()` 메서드를 확인합니다 `src/libcamera/pipeline_handler.cpp:903`. 하드웨어별 매칭과 초기화 로직은 `match()`, `registerCameras()` 및 `initControls()` 와 같은 메서드에서 수행되지만, 스레드 동기화나 콜백 전달 순서는 설계 문서에 명시되지 않았습니다.",
+          "PipelineHandler 클래스는 libcamera::Object 를 상속받으며, PipelineHandlerFactoryBase 와 PipelineHandlerFactory 를 통해 하드웨어별 구현 (예: IPU3, RKISP1) 이 등록됩니다 `class libcamera::PipelineHandler`의 정의를 먼저 확인합니다 `include/libcamera/internal/pipeline_handler.h:34`. 설정과 요청 전달을 위한 핵심 메서드는 `generateConfiguration()`, `configure()`, `exportFrameBuffers()`, `start()` 및 `stop()` 으로, 각 하드웨어 구현 클래스 (예: `PipelineHandlerIPU3`) 에서 재정의됩니다 `src/libcamera/pipeline/ipu3/ipu3.cpp:393`~`src/libcamera/pipeline/ipu3/ipu3.cpp:721`.\n\nFactory 패턴을 통해 특정 이름의 핸들러 인스턴스를 생성할 수 있으며, `PipelineHandlerFactoryBase::create()` 메서드를 확인합니다 `src/libcamera/pipeline_handler.cpp:903`. 하드웨어별 매칭과 초기화 로직은 `match()`, `registerCameras()` 및 `initControls()` 와 같은 메서드에서 수행되지만, 스레드 동기화나 콜백 전달 순서는 설계 문서에 명시되지 않았습니다."
+        ],
+        "status": [
+          "ok",
+          "ok"
+        ],
+        "facts_omitted": [
+          [],
+          []
+        ],
+        "diagram_sha256": [
+          "6f404347632d2d80ca50af8b69c724300a87ccedaad2143bbd61012a7e8158fe",
+          "6f404347632d2d80ca50af8b69c724300a87ccedaad2143bbd61012a7e8158fe"
+        ]
+      },
+      {
+        "section": "ipa",
+        "diagram_changed": false,
+        "body_changed": true,
+        "prose_changed": true,
+        "prose": [
+          "IPA 관리와 구현 진입점을 분석하기 위해 먼저 `libcamera::IPAManager` 클래스의 생성자 정의인 `src/libcamera/ipa_manager.cpp:107` 를 확인합니다. 이 클래스는 `createIPA()` 메서드를 통해 IPA 인스턴스를 생성하며, 해당 메서드의 선언 위치인 `include/libcamera/internal/ipa_manager.h:36` 에서 호출됩니다.\n\n프록시와 알고리즘 사이에서 추가 확인이 필요한 경계는 `libcamera::IPAModule` 의 로드 과정과 `libcamera::IPAProxy` 의 경로 해결입니다. `IPAModule` 의 로드 함수인 `src/libcamera/ipa_module.cpp:406` 를 통해 공유 객체를 로드하고, `createInterface()` 메서드인 `src/libcamera/ipa_module.cpp:451` 에서 인터페이스 인스턴스를 생성합니다. 반면 `libcamera::IPAProxy` 의 `resolvePath()` 함수인 `src/libcamera/ipa_proxy.cpp:217` 는 실행utable 이름에 대한 유효한 전체 경로를 찾습니다.\n\n이러한 프로세스에서 스레드 동기화나 콜백 순서에 대한 설계 근거는 현재 문서에 명시되지 않았습니다. `IPAModule` 의 유효성 검사인 `isValid()` 메서드인 `src/libcamera/ipa_module.cpp:342` 와 `libcamera::IPAProxy` 의 유효성 검사인 `include/libcamera/internal/ipa_proxy.h:34` 를 확인하여 상태 관리 방식을 파악해야 합니다.",
+          "IPAManager, IPAModule, IPAProxy 및 IPU3/RkISP1 구현 클래스는 사실 블록에 명시된 파일과 줄에서 정의됩니다 `class libcamera::IPAManager`의 `createIPA()`를 먼저 확인합니다 `include/libcamera/internal/ipa_manager.h:36`. `libcamera::IPAModule`의 `load()`와 `createInterface()` 호출을 확인합니다 `src/libcamera/ipa_module.cpp:406`, `src/libcamera/ipa_module.cpp:451`. `libcamera::IPAProxy`의 `resolvePath()`를 확인합니다 `src/libcamera/ipa_proxy.cpp:217`. `libcamera::ipa::ipu3::IPAIPU3`의 `init()`와 `queueRequest()`를 확인합니다 `src/ipa/ipu3/ipu3.cpp:218`, `src/ipa/ipu3/ipu3.cpp:534`.\n\n프록시와 알고리즘 사이에서 추가 확인이 필요한 경계는 스레드 동기화 및 콜백 전달 순서에 대한 근거가 부족합니다 `class libcamera::IPAProxy`의 `isValid()`를 확인합니다 `include/libcamera/internal/ipa_proxy.h:34`. `libcamera::ipa::ipu3::IPAIPU3`의 `computeParams()`와 `processStats()` 호출 관계를 확인합니다 `src/ipa/ipu3/ipu3.cpp:447`, `src/ipa/ipu3/ipu3.cpp:489`. 설계 의도가 명확하지 않은 부분은 `class libcamera::IPAModule`의 `isValid()`를 확인합니다 `src/libcamera/ipa_module.cpp:342`."
+        ],
+        "status": [
+          "ok",
+          "ok"
+        ],
+        "facts_omitted": [
+          [],
+          []
+        ],
+        "diagram_sha256": [
+          "6f3aed357d215b82be98f927189bc732612ae15150312f5f2d800ba0678516ae",
+          "6f3aed357d215b82be98f927189bc732612ae15150312f5f2d800ba0678516ae"
+        ]
+      },
+      {
+        "section": "ipu3-lsc-probe",
+        "diagram_changed": true,
+        "body_changed": true,
+        "prose_changed": true,
+        "prose": [
+          "현재 IPU3 알고리즘 구현은 `libcamera::ipa::lsc::ActiveState` 클래스와 `libcamera::ipa::lsc::FrameContext` 클래스가 정의하며, 이들은 각각 `libcamera::ipa::lsc.h:27` 과 `libcamera::ipa::lsc.h:31` 에 위치합니다. LSC 관련 처리 상태는 `libcamera::ipa::ipu3::IPAActiveState` 클래스를 통해 관리되며, 이 클래스는 `src/ipa/ipu3/ipa_context.h:45` 에서 선언되어 있습니다.\n\n알고리즘 초기화 및 구성은 `libcamera::ipa::lsc::LscAlgorithm` 클래스의 `LscAlgorithm<U>()` 생성자 (`src/ipa/libipa/lsc.h:85`) 와 `configure()` 메서드 (`src/ipa/libipa/lsc.h:87`) 를 통해 수행됩니다. 성분 추출과 조회는 `interpolateComponents()` (`src/ipa/libipa/lsc.h:121`) 와 `getComponents()` (`src/ipa/libipa/lsc.h:126`) 메서드를 호출하여 이루어지지만, 내부 실행 순서나 스레드 동기화 방식에 대한 구체적인 근거는 현재 사실 목록에서 확인되지 않았습니다.",
+          "현재 IPU3 알고리즘 구현은 `libcamera::ipa::ipu3::algorithms::Lsc` 클래스가 `libcamera::ipa::Algorithm` 계통을 상속받으며, 초기화부터 처리까지의 주요 메서드가 정의되어 있습니다. 이 클래스는 `init()`, `configure()`, `prepare()`, `process()` 등의 메서드를 통해 알고리즘 라이프사이클을 관리하며, 각 메서드의 구현 위치를 확인합니다 `src/ipa/ipu3/algorithms/lsc.cpp:38`~`src/ipa/ipu3/algorithms/lsc.cpp:282`. 처리 상태와 프레임 컨텍스트는 각각 `libcamera::ipa::ipu3::IPAActiveState`와 `libcamera::ipa::ipu3::IPAFrameContext` 클래스로 관리되며, 이들도 상위 계통을 상속받습니다.\n\nLSC 관련 구현은 `libcamera::ipa::lsc::ActiveState`와 `libcamera::ipa::lsc::FrameContext` 클래스가 존재하며, 이들은 `libcamera::ipa::ipu3::IPAActiveState`와 `libcamera::ipa::ipu3::IPAFrameContext` 와 유사한 구조를 가집니다. LSC 전용 메서드인 `LscAlgorithm<U>()`, `configure()`, `interpolateComponents()`, `getComponents()`는 `libcamera::ipa::LscAlgorithmBase` 계통에서 정의되어 있으며, 구체적인 구현 위치를 확인합니다 `src/ipa/libipa/lsc.h:78`~`src/ipa/libipa/lsc.h:126`. 처리 상태와 프레임 컨텍스트의 상속 관계 및 메서드 호출 순서는 현재 사실 목록에 명시되지 않았으므로 확인 필요: 확인할 항목입니다."
+        ],
+        "status": [
+          "ok",
+          "ok"
+        ],
+        "facts_omitted": [
+          [],
+          []
+        ],
+        "diagram_sha256": [
+          "524d6dff9351850e899fb38c4c008d1eee5669befe93101726703f9be490d6ed",
+          "1169ac40006d7abf2e86f7039c0c8c1dd9e3ad32e7f826670dcb950470b41c60"
+        ]
+      }
+    ],
+    "note": "Body differences include LLM variability and source-line movement; they do not prove semantic correctness.",
+    "named_classes_added": [
+      "libcamera::ipa::ipu3::algorithms::Lsc"
+    ],
+    "named_classes_removed": []
+  },
+  "post_fix_audit": {
+    "a": {
+      "site": {
+        "html_pages": 5,
+        "broken_links": 0,
+        "manifest_verified": true
+      },
+      "prose_audit": {
+        "camera-model": {
+          "ok": true,
+          "invalid": [],
+          "total": 1,
+          "uncited_paragraphs": 1,
+          "notes": [
+            "클래스나 함수를 언급하면서 인용이 없는 문단 1 개"
+          ]
+        },
+        "pipeline-handler": {
+          "ok": true,
+          "invalid": [],
+          "total": 4,
+          "uncited_paragraphs": 0,
+          "notes": []
+        },
+        "ipa": {
+          "ok": true,
+          "invalid": [],
+          "total": 7,
+          "uncited_paragraphs": 0,
+          "notes": []
+        },
+        "ipu3-lsc-probe": {
+          "ok": false,
+          "invalid": [
+            "libcamera::ipa::lsc.h:27",
+            "libcamera::ipa::lsc.h:31"
+          ],
+          "total": 7,
+          "uncited_paragraphs": 0,
+          "notes": [
+            "facts 에 없는 인용 2 개: libcamera::ipa::lsc.h:27, libcamera::ipa::lsc.h:31"
+          ]
+        }
+      }
+    },
+    "b": {
+      "site": {
+        "html_pages": 5,
+        "broken_links": 0,
+        "manifest_verified": true
+      },
+      "prose_audit": {
+        "camera-model": {
+          "ok": true,
+          "invalid": [],
+          "total": 1,
+          "uncited_paragraphs": 1,
+          "notes": [
+            "클래스나 함수를 언급하면서 인용이 없는 문단 1 개"
+          ]
+        },
+        "pipeline-handler": {
+          "ok": true,
+          "invalid": [],
+          "total": 4,
+          "uncited_paragraphs": 0,
+          "notes": []
+        },
+        "ipa": {
+          "ok": true,
+          "invalid": [],
+          "total": 10,
+          "uncited_paragraphs": 0,
+          "notes": []
+        },
+        "ipu3-lsc-probe": {
+          "ok": true,
+          "invalid": [],
+          "total": 4,
+          "uncited_paragraphs": 0,
+          "notes": []
+        }
+      }
+    }
+  },
+  "browser_smoke": {
+    "before_nodes": 7,
+    "after_nodes": 9,
+    "both_rendered": true
+  },
+  "notice": "Original generated verdicts are preserved as test evidence. They are not approval. The post-fix audit detects invalid citations in the A probe; semantic errors remain in A and B."
+}
