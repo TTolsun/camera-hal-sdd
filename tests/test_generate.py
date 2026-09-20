@@ -100,6 +100,15 @@ def test_lint_finding_triggers_retry_with_reason(tmp_cfg, sample_model):
     assert len(agent.users) == 2
     # 재요청 프롬프트에 반려 사유가 들어간다.
     assert "[종결어미]" in agent.users[1] and "이전 출력의 문제" in agent.users[1]
+    # 린트만 실패한 반려에는 인용 복사 지시를 붙이지 않는다.
+    assert "복사해서 인용합니다" not in agent.users[1]
+
+
+def test_citation_failure_keeps_citation_guidance(tmp_cfg, sample_model):
+    no_cite = "이 문서는 카메라 장치의 초기화 순서와 스트림 구성 절차, 콜백 등록 시점을 순서대로 설명합니다. 각 단계는 이후 절에서 자세히 다룹니다."
+    _, verdict, agent = _ask(tmp_cfg, sample_model, [no_cite])
+    assert not verdict.ok
+    assert "복사해서 인용합니다" in agent.users[1]
 
 
 def test_lint_finding_survives_retries_as_needs_review(tmp_cfg, sample_model):

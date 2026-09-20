@@ -25,6 +25,12 @@ def test_fenced_code_lines_are_skipped():
     assert lint("```cpp\nint run() { return 0; } // 실행한다\n```\n본문은 여기서 끝납니다.") == []
 
 
+def test_unterminated_fence_is_itself_a_finding():
+    findings = lint("```cpp\nint run();\n펜스가 닫히지 않은 채 본문이 이어진다")
+    assert [f.rule for f in findings] == ["닫히지 않은 코드 펜스"]
+    assert findings[0].line == 1
+
+
 def test_dialogue_and_prompt_leak_are_rejected():
     assert [f.rule for f in lint("이 원고는 다음 절에서 검토를 요청합니다.")] == ["대화체·작업 보고"]
     assert [f.rule for f in lint("제공된 코드에서 콜백 등록을 확인했습니다.")] == ["원고·근거 언급"]

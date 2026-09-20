@@ -91,9 +91,12 @@ def unwrap(text: str) -> str:
 def lint(body: str) -> list[Finding]:
     findings: list[Finding] = []
     fenced = False
+    fence_line, fence_text = 0, ""
     for i, line in enumerate(body.replace("\r\n", "\n").split("\n")):
         if _FENCE.match(line):
             fenced = not fenced
+            if fenced:
+                fence_line, fence_text = i + 1, line.strip()
             continue
         if fenced:
             continue
@@ -104,6 +107,11 @@ def lint(body: str) -> list[Finding]:
                 continue
             if r.test(line):
                 findings.append(Finding(r.rule, r.detail, i + 1, line.strip()))
+    if fenced:
+        # 닫히지 않은 펜스는 이후 줄 전체를 검사 불능으로 만들므로 그 자체를 위반으로 잡는다.
+        findings.append(Finding("닫히지 않은 코드 펜스",
+                                "코드 펜스(```)가 닫히지 않아 이후 본문을 검사할 수 없습니다. 펜스를 닫거나 코드 블록 없이 문단만 씁니다.",
+                                fence_line, fence_text))
     return findings
 
 

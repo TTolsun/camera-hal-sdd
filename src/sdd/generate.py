@@ -252,6 +252,7 @@ class Generator:
             raw = self.agent.chat(self.system, user, tag=f"{tag}_{attempt}")
             text = strip_headings(strip_echo(normalize_citations(unwrap(raw), self.allowed), self.system + "\n" + user))
             verdict = check(text, self.allowed, require=self.cfg.require_citations)
+            cite_failed = not verdict.ok
             # 인용과 별개로 문장 형태 위반(종결어미, 대화체, 프롬프트 누설)도 반려 사유다.
             problems = lint(text)
             if problems:
@@ -259,10 +260,13 @@ class Generator:
                 verdict.notes.extend(describe(problems))
             if verdict.ok:
                 break
-            usable = list(dict.fromkeys(extract_citations(facts)))[:12]
             user = user + "\n\n## 이전 출력의 문제\n" + "\n".join(f"- {n}" for n in verdict.notes) + \
-                "\n위 문제를 고쳐서 다시 씁니다. 사실 블록에 적힌 `파일:줄` 을 디렉터리까지 그대로 복사해서 인용합니다." + \
-                ("\n인용할 수 있는 위치 예: " + ", ".join(f"`{c}`" for c in usable) if usable else "")
+                "\n위 문제를 고쳐서 다시 씁니다."
+            if cite_failed:
+                # 인용 검증 실패에만 인용 복사 지시를 붙인다. 린트만 실패했을 때는 문장 교정에 집중시킨다.
+                usable = list(dict.fromkeys(extract_citations(facts)))[:12]
+                user += " 사실 블록에 적힌 `파일:줄` 을 디렉터리까지 그대로 복사해서 인용합니다." + \
+                    ("\n인용할 수 있는 위치 예: " + ", ".join(f"`{c}`" for c in usable) if usable else "")
         return text, omitted, verdict
 
     # ---- 사실에서 만드는 표와 목록 -------------------------------------------------
