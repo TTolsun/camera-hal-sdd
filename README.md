@@ -45,7 +45,7 @@ LLM (사내 Ollama 의 Qwen / Hermes, 또는 openai-compatible 게이트웨이)
    섹션마다 따로 호출, 입력 예산 초과분은 우선순위 낮은 사실부터 통째로 제외
    │
    ▼
-인용 검증 (validate.py) → sdd/*.md (+ frontmatter: status, facts_omitted)
+인용 검증 (validate.py) + 문장 린트 (manuscript.py) → sdd/*.md (+ frontmatter: status, facts_omitted)
    │
    ▼
 docs 저장소 Gerrit change → 사람 리뷰 → merge → mkdocs 게시
@@ -170,7 +170,7 @@ config/                  섹션, 시나리오, clang-uml 설정
 prompts/                 LLM 프롬프트
 style/                   집필 규칙 (omm-doc-workflow 와 동일, MIT)
 templates/page.md        페이지 뼈대
-src/sdd/                 파이프라인 코드 (cli, compdb, extract, impact, generate, llm, validate, budget)
+src/sdd/                 파이프라인 코드 (cli, compdb, extract, impact, generate, llm, validate, manuscript, budget)
 src/sdd/facts/           사실 추출 (model, clang_uml, callgraph(libclang 대체), comments, flags)
 examples/mini-hal/       작은 C++ HAL 예제 + 파싱 전용 std 스텁
 sdd/                     생성된 SDD (mkdocs docs_dir). 리뷰 대상.

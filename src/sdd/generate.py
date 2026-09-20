@@ -24,6 +24,7 @@ from .diagrams import diagram_block, section_diagram
 from .facts.model import ClassInfo, KnowledgeModel, Scenario
 from .impact import ImpactReport
 from .llm import Agent
+from .manuscript import describe, lint, unwrap
 from .validate import Verdict, check, extract_citations, normalize_citations, strip_echo, strip_headings
 
 _FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
@@ -249,8 +250,13 @@ class Generator:
         text = ""
         for attempt in range(self.cfg.max_retries + 1):
             raw = self.agent.chat(self.system, user, tag=f"{tag}_{attempt}")
-            text = strip_headings(strip_echo(normalize_citations(raw, self.allowed), self.system + "\n" + user))
+            text = strip_headings(strip_echo(normalize_citations(unwrap(raw), self.allowed), self.system + "\n" + user))
             verdict = check(text, self.allowed, require=self.cfg.require_citations)
+            # 인용과 별개로 문장 형태 위반(종결어미, 대화체, 프롬프트 누설)도 반려 사유다.
+            problems = lint(text)
+            if problems:
+                verdict.ok = False
+                verdict.notes.extend(describe(problems))
             if verdict.ok:
                 break
             usable = list(dict.fromkeys(extract_citations(facts)))[:12]

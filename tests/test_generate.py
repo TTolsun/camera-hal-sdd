@@ -1,8 +1,36 @@
 from pathlib import Path
 
+from sdd.budget import Block
 from sdd.generate import Generator, compose_system_prompt, slugify
 from sdd.impact import compute
 from sdd.llm import Agent
+
+
+class _FakeAgent:
+    """정해진 답을 차례로 돌려주는 LLM 대역. 마지막 답을 반복한다."""
+
+    def __init__(self, replies: list[str]):
+        self.replies = replies
+        self.users: list[str] = []
+
+    def chat(self, system: str, user: str, tag: str = "") -> str:
+        self.users.append(user)
+        return self.replies[min(len(self.users) - 1, len(self.replies) - 1)]
+
+
+_GOOD = ("`CameraDevice` 는 카메라마다 하나씩 만들어집니다 `device/CameraDevice.h:40`. "
+         "스트림 구성은 `configureStreams()` 가 담당합니다 `device/CameraDevice.cpp:120`.")
+_BAD = _GOOD.replace("담당합니다", "담당한다")
+
+
+def _ask(tmp_cfg, sample_model, replies):
+    tmp_cfg.agent.kind = "fake"
+    agent = _FakeAgent(replies)
+    gen = Generator(tmp_cfg, sample_model, agent)
+    sec = {"id": "t", "title": "테스트"}
+    blocks = [Block("core", "class CameraDevice `device/CameraDevice.h:40`", 0)]
+    text, _, verdict = gen._ask("t", sec, "테스트", blocks, "")
+    return text, verdict, agent
 
 
 def test_slugify_keeps_korean_like_pymdownx():
@@ -64,6 +92,27 @@ def test_dry_run_generates_all_pages_with_frame(tmp_cfg, sample_model):
     assert prompts, "dry-run 은 프롬프트를 기록해야 한다"
     body = prompts[0].read_text(encoding="utf-8")
     assert "개발자 가이드 집필 규칙" in body and "사실 (이 목록 밖의 내용은 쓰지 않습니다):" in body
+
+
+def test_lint_finding_triggers_retry_with_reason(tmp_cfg, sample_model):
+    text, verdict, agent = _ask(tmp_cfg, sample_model, [_BAD, _GOOD])
+    assert verdict.ok and "담당합니다" in text
+    assert len(agent.users) == 2
+    # 재요청 프롬프트에 반려 사유가 들어간다.
+    assert "[종결어미]" in agent.users[1] and "이전 출력의 문제" in agent.users[1]
+
+
+def test_lint_finding_survives_retries_as_needs_review(tmp_cfg, sample_model):
+    _, verdict, agent = _ask(tmp_cfg, sample_model, [_BAD])
+    assert not verdict.ok
+    assert len(agent.users) == tmp_cfg.max_retries + 1
+    assert any("[종결어미]" in n for n in verdict.notes)
+
+
+def test_fence_wrapped_reply_is_unwrapped_before_checks(tmp_cfg, sample_model):
+    text, verdict, agent = _ask(tmp_cfg, sample_model, [f"```markdown\n{_GOOD}\n```"])
+    assert verdict.ok and len(agent.users) == 1
+    assert "```" not in text
 
 
 def test_impact_limits_regeneration(tmp_cfg, sample_model):
