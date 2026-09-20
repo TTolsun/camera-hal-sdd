@@ -149,19 +149,27 @@ class Generator:
         omitted_all: list[str] = []
         worst = Verdict(ok=True)
         existing = self._existing(sec)
-        targets = sorted(self.model.packages)
-        if impact and impact.packages:
-            targets = [p for p in targets if p in impact.packages]
+        # 영향 밖 패키지의 기존 절은 지우지 않고 이월한다. 이월 조건은 절의 인용이 새 facts 에도
+        # 전부 있는 것이고, 조건을 어기거나 기존 절이 없으면 그 패키지도 다시 생성한다.
+        limit = set(impact.packages) if impact and impact.packages else None
+        reusable = self._existing_blocks(sec) if limit is not None else {}
 
         diagram = self._diagram_ref(sec.get("facts", {}).get("diagram"))
         if diagram:
             parts.append("## 전체 구조도\n\n" + diagram)
 
-        for pkg_name in targets:
+        for pkg_name in sorted(self.model.packages):
             classes = [self.model.classes[n] for n in self.model.packages[pkg_name].classes if n in self.model.classes]
             classes = [c for c in classes if _match_class(c, sec)]
             if not classes:
                 continue
+            if limit is not None and pkg_name not in limit:
+                reused = reusable.get(pkg_name, "")
+                if reused and all(c in self.allowed for c in extract_citations(reused)):
+                    parts.append(reused.strip())
+                    routes.append((f"{pkg_name} 패키지의 클래스를 수정합니다.", f"#{slugify(pkg_name)}"))
+                    all_tables.append(reused)   # 페이지 근거 파일 목록에 이월 절의 인용도 남긴다.
+                    continue
             table = _class_table(classes)
             blocks = [Block("table", f"### 패키지 {pkg_name}\n{table}", 0)]
             blocks += [Block(f"class:{c.name}", _class_fact(c), 1) for c in classes]
@@ -423,6 +431,18 @@ class Generator:
             lines.append("- 입력 예산 때문에 제외된 사실: " + ", ".join(omitted))
         lines.append(f"- 검토: {dt.date.today().isoformat()} · {self.cfg.agent.kind}/{self.cfg.agent.model} · 사람 검토 전")
         return "\n".join("    " + l for l in lines)
+
+    def _existing_blocks(self, sec: dict[str, Any]) -> dict[str, str]:
+        """기존 페이지의 `## 제목` 블록을 제목별로 돌려준다 (절 안의 근거 노트 포함).
+
+        페이지 공통 꼬리(페이지 수준 근거 노트와 다음 단계 줄)는 마지막 절에 섞이지 않게 잘라 낸다."""
+        path = self.cfg.sdd_dir / sec.get("output", f"{sec['id']}.md")
+        if not path.exists():
+            return {}
+        text = _FRONTMATTER.sub("", path.read_text(encoding="utf-8"), count=1)
+        text = re.split(r"^\?\?\? note \"근거와 검토 정보\"$", text, maxsplit=1, flags=re.M)[0]
+        return {m.group(1).strip(): m.group(0)
+                for m in re.finditer(r"^## (.+?)\n.*?(?=^## |\Z)", text, flags=re.S | re.M)}
 
     def _existing(self, sec: dict[str, Any]) -> str:
         path = self.cfg.sdd_dir / sec.get("output", f"{sec['id']}.md")

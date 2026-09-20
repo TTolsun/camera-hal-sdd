@@ -124,6 +124,44 @@ def test_fence_wrapped_reply_is_unwrapped_before_checks(tmp_cfg, sample_model):
     assert "```" not in text
 
 
+def test_per_package_incremental_preserves_other_sections(tmp_cfg, sample_model):
+    from sdd.impact import ImpactReport
+    tmp_cfg.agent.kind = "fake"
+    sec = {"id": "components", "title": "컴포넌트 구조와 책임", "facts": {"classes": ["*"]}}
+    first = _FakeAgent([_GOOD])
+    Generator(tmp_cfg, sample_model, first)._per_package(sec, None)
+    assert len(first.users) == 2                       # device, pipeline 두 번 호출
+    page = tmp_cfg.sdd_dir / "components.md"
+    assert page.read_text(encoding="utf-8").count("만들어집니다") == 2
+
+    second = _FakeAgent([_GOOD.replace("만들어집니다", "새로 생성됩니다")])
+    report = ImpactReport(base="a", head="b", packages=["device"], sections={"components": []})
+    Generator(tmp_cfg, sample_model, second)._per_package(sec, report)
+    text = page.read_text(encoding="utf-8")
+    assert len(second.users) == 1                      # device 만 다시 생성
+    assert "새로 생성됩니다" in text                     # device 절은 갱신
+    assert "만들어집니다" in text                        # pipeline 절은 이월
+    assert '??? note "근거와 검토 정보: pipeline"' in text
+    assert "| pipeline 패키지의 클래스를 수정합니다. |" in text
+
+
+def test_per_package_regenerates_reused_section_with_broken_citations(tmp_cfg, sample_model):
+    from sdd.impact import ImpactReport
+    tmp_cfg.agent.kind = "fake"
+    sec = {"id": "components", "title": "컴포넌트 구조와 책임", "facts": {"classes": ["*"]}}
+    Generator(tmp_cfg, sample_model, _FakeAgent([_GOOD]))._per_package(sec, None)
+    page = tmp_cfg.sdd_dir / "components.md"
+    # 이월 후보 절의 인용이 새 facts 와 어긋난 상황을 만든다.
+    page.write_text(page.read_text(encoding="utf-8").replace("device/CameraDevice.cpp:120", "gone/Gone.cpp:1"),
+                    encoding="utf-8", newline="\n")
+
+    second = _FakeAgent([_GOOD])
+    report = ImpactReport(base="a", head="b", packages=["device"], sections={"components": []})
+    Generator(tmp_cfg, sample_model, second)._per_package(sec, report)
+    assert len(second.users) == 2                      # pipeline 도 이월하지 않고 다시 생성
+    assert "gone/Gone.cpp:1" not in page.read_text(encoding="utf-8")
+
+
 def test_impact_limits_regeneration(tmp_cfg, sample_model):
     agent = Agent(tmp_cfg.agent)
     report = compute(tmp_cfg, sample_model, ["pipeline/PipeThread.h"], base="a", head="b")
