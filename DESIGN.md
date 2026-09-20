@@ -2,6 +2,8 @@
 
 이 문서는 `camera-hal-sdd` 생성기의 유지보수 기준입니다. 특정 사이트의 HTML을 직접 고쳐서 디자인을 유지하지 않습니다.
 
+최종 적용 대상은 사내 Camera HAL입니다. libcamera는 공개 테스트 대상이며, 예제의 빌드·호스팅 환경을 사내 운영의 필수 조건으로 만들지 않습니다. 구체적인 작업 기준은 [AGENTS.md](AGENTS.md)에 기록합니다.
+
 1. 구조는 `facts.json`에서만 가져옵니다. `src/sdd/diagrams.py`가 Markdown 생성과 사이트 빌드에서 사용하는 공통 Mermaid 규칙입니다. LLM에는 배치나 화살표 생성을 맡기지 않습니다.
 2. 프로젝트 차이는 `sdd.yaml`의 `diagrams`와 `site`, `sections.yaml`의 클래스 선택·절별 `diagram` 설정으로 표현합니다. libcamera 네임스페이스를 공통 코드에 하드코딩하지 않습니다.
 3. Markdown 생성 시 설명 → 관계 그림 → 클래스 근거 순서를 적용합니다. `sdd:class-diagram` 주석 사이의 블록은 생성기가 관리합니다. 디자인 변경으로 인용 검사 상태나 사람 검토 상태를 승격하지 않습니다.
