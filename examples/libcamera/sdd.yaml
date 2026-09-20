@@ -1,0 +1,48 @@
+# Ubuntu에서 Meson 빌드 디렉터리를 현재 디렉터리로 두고 실행한다.
+# 자세한 절차: ../../docs/libcamera-home-lab.md
+source:
+  root: ../../../libcamera
+  compile_commands: ../../../libcamera/build/compile_commands.json
+  exclude: ["subprojects/**", "test/**"]
+  ndk_build:
+    enabled: false
+
+output:
+  facts_dir: build/facts
+  sdd_dir: build/sdd
+  diagrams_dir: build/sdd/diagrams
+
+paths:
+  sections_file: config/sections.yaml
+  scenarios_file: config/scenarios.yaml
+  prompts: prompts
+  templates: ../../templates
+  style: ../../style
+
+tools:
+  clang_uml: none
+
+agent:
+  kind: dry-run
+  model: qwen3.5:4b
+  base_url: http://localhost:11434
+  max_input_chars: 18000
+  num_ctx: 16384
+  timeout_sec: 600
+  full_style_guides: false
+
+review:
+  require_citations: true
+  max_retries: 1
+
+site:
+  enabled: true
+  title: libcamera 설계 문서
+  intro: site-intro.md
+  source_url: https://github.com/TTolsun/libcamera-sdd
+
+diagrams:
+  enabled: true
+  max_nodes: 16
+  direction: LR
+  strip_namespace: 'libcamera::'

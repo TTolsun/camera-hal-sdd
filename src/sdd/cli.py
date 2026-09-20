@@ -7,6 +7,7 @@
   sdd generate [--sections a,b] [--from-impact]   SDD Markdown 생성
   sdd run --base <ref>            extract -> impact -> generate 한 번에
   sdd build                       mkdocs build
+  sdd export-site [--out dir]     탐색 메뉴·검색·Mermaid 확대를 갖춘 정적 사이트
   sdd export-html [--out f.html]  SDD 전체를 파일 하나짜리 HTML 로
 """
 
@@ -114,6 +115,9 @@ def cmd_generate(args: argparse.Namespace) -> int:
                              .format(facts=impact_mod.summary_facts(report, model)), tag="change_impact")
         (cfg.build_dir / "change_impact.md").write_text(summary + "\n", encoding="utf-8")
         print("-> build/change_impact.md (리뷰어용 변경 요약)")
+    if (cfg.raw.get("site") or {}).get("enabled", False):
+        from .export_site import export_site
+        print(f"-> {export_site(cfg)}")
     return 0
 
 
@@ -146,6 +150,22 @@ def cmd_export_html(args: argparse.Namespace) -> int:
                  mermaid_src=args.mermaid, site_name=args.title,
                  pages=args.pages.split(",") if args.pages else None)
     print(f"-> {out}")
+    return 0
+
+
+def cmd_export_site(args: argparse.Namespace) -> int:
+    from .export_site import export_site
+
+    out = export_site(_cfg(args), out=Path(args.out).resolve() if args.out else None,
+                      mermaid_src=args.mermaid)
+    print(f"-> {out}")
+    return 0
+
+
+def cmd_verify_site(args: argparse.Namespace) -> int:
+    from .site_build import verify_site
+    cfg = _cfg(args)
+    print(verify_site(Path(args.out) if args.out else cfg.build_dir / "site"))
     return 0
 
 
@@ -189,6 +209,15 @@ def main(argv: list[str] | None = None) -> int:
     s.set_defaults(fn=cmd_run)
 
     sub.add_parser("build").set_defaults(fn=cmd_build)
+
+    s = sub.add_parser("export-site", help="탐색 메뉴, 목차, 검색, Mermaid 확대를 갖춘 정적 문서 사이트")
+    s.add_argument("--out", help="출력 디렉터리 (기본: build/site)")
+    s.add_argument("--mermaid", help="Mermaid ESM URL 또는 사이트 루트 기준 로컬 경로")
+    s.set_defaults(fn=cmd_export_site)
+
+    s = sub.add_parser("verify-site", help="사이트 산출물 해시와 내부 링크를 검사한다")
+    s.add_argument("--out", help="검사할 사이트 디렉터리 (기본: build/site)")
+    s.set_defaults(fn=cmd_verify_site)
 
     s = sub.add_parser("export-html", help="SDD 전체를 파일 하나짜리 HTML 로 만든다 (메일, 오프라인 열람용)")
     s.add_argument("--out", help="출력 파일 (기본: build/sdd.html)")
