@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import datetime as dt
 import fnmatch
+import json
 import os
 import re
 from collections import Counter
@@ -27,6 +28,8 @@ from .matching import matches_symbol
 from .llm import Agent
 from .manuscript import describe, lint, unwrap
 from .validate import Verdict, check, extract_citations, normalize_citations, strip_echo, strip_headings
+from .evidence import contract_text, fingerprint, requires_fingerprint, topic_blocks
+from .semantic import relation_facts, structural_text, review as semantic_review
 
 _FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
 _YAML_FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
@@ -72,6 +75,7 @@ class Generator:
         self.section_tpl = (cfg.prompts_dir / "section.md").read_text(encoding="utf-8")
         self.page_tpl = (cfg.templates_dir / "page.md").read_text(encoding="utf-8")
         self.allowed = model.citations()
+        self.reviews: dict[str, dict] = {}
         # routes 표의 링크 글자: 페이지 링크는 섹션 제목, 앵커 링크는 본문의 ## 제목 원문을 쓴다.
         self.page_titles = {sec.get("output", f"{sec['id']}.md"): sec["title"] for sec in cfg.sections()}
         self.page_titles.update({f"{sid}.md": sc.title for sid, sc in model.scenarios.items()})
@@ -120,22 +124,63 @@ class Generator:
         if facts.get("functions"):
             t = self._entrypoint_table(facts["functions"])
             if t:
-                tables.append("## HAL 진입점\n\n" + t)
-                blocks.append(Block("functions", "### HAL 진입점\n" + t, 2))
+                tables.append("## 관련 자유 함수\n\n" + t)
+                blocks.append(Block("functions", "### 관련 자유 함수\n" + t, 2))
         if facts.get("classes"):
             classes = [c for c in self._sorted_classes() if _match_class(c, sec)]
+            missing_classes = [name for name in facts["classes"] if not any(ch in name for ch in "*?[")
+                               and not any(matches_symbol(c.name, [name]) for c in classes)]
+            if missing_classes:
+                absence = "현재 facts에서 선택한 클래스가 추출되지 않았습니다: " + ", ".join(f"`{n}`" for n in missing_classes)
+                tables.append("## 추출 범위 확인\n\n" + absence + ". 소스 전체에 없다는 판정은 아닙니다.")
+                blocks.append(Block("missing-classes", absence, 1))
             if classes:
                 # class_table: false 이면 표는 안 그리고 LLM 에게 인용할 사실만 준다 (개요처럼 표가 과한 절).
                 if facts.get("class_table", True):
                     tables.append("## 관련 클래스\n\n" + _class_table(classes))
                 blocks += [Block(f"class:{c.name}", _class_fact(c), 2) for c in classes]
+                blocks.append(Block("relations", relation_facts(self.model, {c.name for c in classes}), 1))
         if facts.get("reading_order"):
             ro = self._reading_order(facts["reading_order"])
             if ro:
                 tables.append("## 코드를 처음 읽는 순서\n\n" + ro)
 
-        text, omitted, verdict = self._ask(sec["id"], sec, sec["title"], blocks, self._existing(sec))
-        body = "\n\n".join([f"## {sec.get('prose_heading', '구조 설명')}\n\n{text}"]
+        if sec.get("design_topics"):
+            parts, omitted, verdict = [], [], Verdict(ok=True)
+            for topic in sec["design_topics"]:
+                evidence, gaps = topic_blocks(self.model, sec["id"], topic)
+                topic_sec = {**sec, "answers": [topic["question"]], "semantic_review": True}
+                tag = f"{sec['id']}_{topic['id']}"
+                if gaps:
+                    text = "확인 필요: " + " / ".join(gaps)
+                    missing, current = [], Verdict(ok=False, notes=gaps)
+                    self._record_review(tag, text, current, missing)
+                elif "statements" in topic:
+                    text, gaps = contract_text(self.model, sec["id"], topic)
+                    missing, current = [], Verdict(ok=not gaps, notes=gaps)
+                    self._record_review(tag, text, current, missing, mode="source-bound-contract")
+                else:
+                    text, missing, current = self._ask(tag, topic_sec, topic["title"], evidence, "")
+                parts.append(f"## {topic['title']}\n\n{text}")
+                blocks += evidence
+                omitted += missing
+                if not current.ok:
+                    verdict.ok = False
+                    verdict.notes += current.notes
+            prose = "\n\n".join(parts)
+        elif sec.get("narration") == "facts":
+            selected = {c.name for c in self._sorted_classes() if _match_class(c, sec)}
+            text = structural_text(self.model, selected)
+            omitted = []
+            verdict = Verdict(ok=bool(selected) and all(self.model.classes[n].loc for n in selected))
+            if not verdict.ok:
+                verdict.notes.append("설명할 클래스 또는 선언 근거가 없습니다.")
+            self._record_review(sec['id'], text, verdict, omitted, mode="extracted-structure")
+            prose = f"## {sec.get('prose_heading', '구조 설명')}\n\n{text}"
+        else:
+            text, omitted, verdict = self._ask(sec["id"], sec, sec["title"], blocks, self._existing(sec))
+            prose = f"## {sec.get('prose_heading', '구조 설명')}\n\n{text}"
+        body = "\n\n".join([prose]
                            + ([diagram] if diagram else []) + tables)
         if sec.get("needs_human"):
             body += "\n\n확인 필요: 이 절의 내용은 정적 분석 결과입니다. 콜백 실행 스레드와 종료 순서는 코드를 직접 실행해서 확인해야 합니다."
@@ -152,6 +197,10 @@ class Generator:
         # 영향 밖 패키지의 기존 절은 지우지 않고 이월한다. 이월 조건은 절의 인용이 새 facts 에도
         # 전부 있는 것이고, 조건을 어기거나 기존 절이 없으면 그 패키지도 다시 생성한다.
         limit = set(impact.packages) if impact and impact.packages else None
+        # Citation equality alone cannot preserve a semantically checked package.
+        # Until per-package evidence fingerprints exist, regenerate its full page.
+        if sec.get("semantic_review"):
+            limit = None
         reusable = self._existing_blocks(sec) if limit is not None else {}
 
         diagram = self._diagram_ref(sec.get("facts", {}).get("diagram"))
@@ -242,6 +291,10 @@ class Generator:
 
     def _ask(self, tag: str, sec: dict[str, Any], title: str, blocks: list[Block],
              existing: str) -> tuple[str, list[str], Verdict]:
+        # Prior prose is not evidence. In particular, an A-side absence claim
+        # must not contaminate B after a class is added.
+        if sec.get("semantic_review"):
+            existing = ""
         if existing:
             blocks = blocks + [Block("existing", existing, 9)]
         reserved = len(self.system) + len(self.section_tpl) + len(title) + 400
@@ -253,7 +306,9 @@ class Generator:
         if self.cfg.agent.kind == "dry-run":
             # 프롬프트만 기록한다. 검증할 출력이 없으므로 사람이 볼 문서로 표시한다.
             text = self.agent.chat(self.system, user, tag=tag)
-            return text, omitted, Verdict(ok=False, notes=["dry-run: LLM 을 호출하지 않았습니다."])
+            verdict = Verdict(ok=False, notes=["dry-run: LLM 을 호출하지 않았습니다."])
+            self._record_review(tag, text, verdict, omitted)
+            return text, omitted, verdict
 
         verdict = Verdict(ok=False)
         text = ""
@@ -267,6 +322,13 @@ class Generator:
             if problems:
                 verdict.ok = False
                 verdict.notes.extend(describe(problems))
+            if sec.get("semantic_review"):
+                findings = semantic_review(text, self.model, set(extract_citations(facts)))
+                if omitted:
+                    findings.append("설명 입력에서 근거 블록이 생략됐습니다: " + ", ".join(omitted))
+                if findings:
+                    verdict.ok = False
+                    verdict.notes.extend(findings)
             if verdict.ok:
                 break
             user = user + "\n\n## 이전 출력의 문제\n" + "\n".join(f"- {n}" for n in verdict.notes) + \
@@ -276,7 +338,19 @@ class Generator:
                 usable = list(dict.fromkeys(extract_citations(facts)))[:12]
                 user += " 사실 블록에 적힌 `파일:줄` 을 디렉터리까지 그대로 복사해서 인용합니다." + \
                     ("\n인용할 수 있는 위치 예: " + ", ".join(f"`{c}`" for c in usable) if usable else "")
+        self._record_review(tag, text, verdict, omitted)
         return text, omitted, verdict
+
+    def _record_review(self, tag: str, text: str, verdict: Verdict, omitted: list[str], mode: str = "generated-prose") -> None:
+        self.reviews[tag] = {"status": _status(verdict), "findings": verdict.notes,
+                             "facts_omitted": omitted, "text": text,
+                             "mode": mode,
+                             "human_review": "pending",
+                             "scope": "source-bound-contract: excerpt hash equality; extracted-structure: facts rendering; generated-prose: citation, manuscript and configured structural checks; no semantic approval"}
+        path = self.cfg.build_dir / "content-review.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"source_commit": self.model.meta.get("source_commit"),
+                                    "sections": self.reviews}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     # ---- 사실에서 만드는 표와 목록 -------------------------------------------------
 
@@ -370,6 +444,9 @@ class Generator:
     def _write_section(self, sec: dict[str, Any], body: str, blocks: list[Block], tables: list[str],
                        verdict: Verdict, omitted: list[str], routes: list[tuple[str, str]] | None = None) -> Path:
         extra = {"section": sec["id"]}
+        if requires_fingerprint(sec):
+            extra["evidence_fingerprint"] = fingerprint(self.model, sec)
+            extra["semantic_review"] = "human-review-required"
         status = _status(verdict)
         if sec.get("needs_human"):
             extra["needs_human"] = "true"
@@ -425,7 +502,7 @@ class Generator:
         lines = [
             "- 근거 파일: " + (", ".join(f"`{f}`" for f in files) if files else "(없음)"),
             f"- 근거 수준: 코드 확인 (정적 분석, {meta.get('build_config', 'ndk-build')} 구성, commit `{meta.get('source_commit', '')[:10] or '?'}`)",
-            "- 인용 검증: " + ("통과" if verdict.ok else "실패 (" + "; ".join(verdict.notes) + ")"),
+            "- 자동 검사 (인용·문장 및 설정된 구조 검사): " + ("통과" if verdict.ok else "실패 (" + "; ".join(verdict.notes) + ")"),
         ]
         if omitted:
             lines.append("- 입력 예산 때문에 제외된 사실: " + ", ".join(omitted))

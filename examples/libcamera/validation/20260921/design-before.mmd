@@ -1,0 +1,15 @@
+flowchart LR
+  c0["ipa::FrameContext"]:::context
+  c1["ipa::LscAlgorithm"]
+  c2["ipa::LscAlgorithmBase"]:::context
+  c3["ipa::ipu3::IPAActiveState"]
+  c4["ipa::ipu3::IPAContext"]
+  c5["ipa::ipu3::IPAFrameContext"]
+  c6["ipa::ipu3::IPASessionConfiguration"]
+  c7["ipa::lsc::ActiveState"]
+  c8["ipa::lsc::FrameContext"]
+  c1 -.->|상속| c2
+  c4 -->|필드 참조| c3
+  c4 -->|필드 참조| c6
+  c5 -.->|상속| c0
+  classDef context fill:#fafafa,stroke:#aaa,stroke-dasharray:4 3,color:#555

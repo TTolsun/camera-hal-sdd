@@ -67,6 +67,29 @@ def test_stale_facts_abort_before_publication(tmp_cfg, sample_model):
     assert not (tmp_cfg.build_dir / 'site').exists()
 
 
+def test_changed_design_configuration_blocks_same_commit_publication(tmp_cfg, sample_model):
+    import yaml
+    from sdd.generate import Generator
+    from sdd.llm import Agent
+    prepare(tmp_cfg, sample_model)
+    sections = tmp_cfg.sections()
+    sections[0]['semantic_review'] = True
+    tmp_cfg.sections_file.write_text(yaml.safe_dump({'sections': sections}), encoding='utf-8')
+    Generator(tmp_cfg, sample_model, Agent(tmp_cfg.agent)).run()
+    site = export_site(tmp_cfg)
+    manifest = (site / 'site-manifest.json').read_bytes()
+    sections[0]['answers'] = ['Changed design question']
+    tmp_cfg.sections_file.write_text(yaml.safe_dump({'sections': sections}), encoding='utf-8')
+    with pytest.raises(RuntimeError, match='Design evidence changed'):
+        export_site(tmp_cfg)
+    assert (site / 'site-manifest.json').read_bytes() == manifest
+    # Removing the option must not bypass the existing page's fingerprint.
+    sections[0].pop('semantic_review')
+    tmp_cfg.sections_file.write_text(yaml.safe_dump({'sections': sections}), encoding='utf-8')
+    with pytest.raises(RuntimeError, match='Design evidence changed'):
+        export_site(tmp_cfg)
+
+
 def test_diagram_has_only_extracted_relations_and_unique_node_ids(sample_model):
     sample_model.classes['other::PipeThread'] = ClassInfo('other::PipeThread')
     sample_model.relations += [Relation('PipeThread', 'CameraDevice', 'association')]
