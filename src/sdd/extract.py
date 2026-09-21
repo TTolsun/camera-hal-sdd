@@ -65,6 +65,8 @@ def run(cfg: Config, skip_comments: bool = False, skip_clang_uml: bool = False,
               f"시나리오 {stats['scenarios']} 개, 진입점 못 찾음 {stats['missing_entries']} 개")
 
     flags.collect(model, cfg, entries)
+    from .evidence import collect as collect_evidence
+    collect_evidence(cfg, model)
 
     model.meta["classes"] = len(model.classes)
     model.meta["functions"] = len(model.functions)

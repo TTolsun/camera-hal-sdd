@@ -15,6 +15,7 @@ from pathlib import Path
 from .config import Config
 from .facts.model import KnowledgeModel
 from .validate import extract_citations
+from .evidence import fingerprint, requires_fingerprint
 
 _FM = re.compile(r"^---\n(.*?)\n---\n", re.S)
 
@@ -43,6 +44,7 @@ def carry_forward(cfg: Config, model: KnowledgeModel,
 
     done = {p.resolve() for p in written}
     allowed = model.citations()
+    sections = {s["id"]: s for s in cfg.sections()}
     for path in sorted(cfg.sdd_dir.rglob("*.md")):
         if path.resolve() in done:
             continue
@@ -60,6 +62,9 @@ def carry_forward(cfg: Config, model: KnowledgeModel,
 
         body = text[m.end():]
         invalid = sorted({c for c in extract_citations(body) if c not in allowed})
+        sec = sections.get(meta.get("section", ""), {})
+        if (requires_fingerprint(sec) or meta.get("evidence_fingerprint")) and meta.get("evidence_fingerprint") != fingerprint(model, sec):
+            invalid.append("설계 질문·구조·소스 근거가 변경됐거나 이전 지문이 없습니다.")
         if invalid:
             stale.append((path, invalid))
             continue

@@ -111,6 +111,10 @@ def cmd_impact(args: argparse.Namespace) -> int:
 def cmd_generate(args: argparse.Namespace) -> int:
     cfg = _cfg(args)
     model = _load_model(cfg)
+    if any(s.get("design_topics") for s in cfg.sections()):
+        from .evidence import collect as collect_evidence
+        collect_evidence(cfg, model)
+        model.save(cfg.facts_path)
     report = None
     if args.from_impact:
         p = cfg.build_dir / "impact.json"

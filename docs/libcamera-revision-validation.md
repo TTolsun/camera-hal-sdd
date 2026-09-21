@@ -77,4 +77,4 @@ uv run python examples/libcamera/compare_revision_outputs.py --base-dir build/re
 
 전체 facts·빌드 로그·프롬프트·HTML·원고는 로컬 `build/revision-validation/20260921/`에 보관했습니다. 작은 비교 기록과 Mermaid만 저장소에 포함했습니다. 검증 과정에서 공개 Pages를 새 원고로 교체하거나 upstream 브랜치를 갱신하지 않았습니다.
 
-다음 단계는 변경된 클래스·관계가 어느 문서에서도 설명되지 않는 경우를 감지하고, 관계 근거를 모델 입력과 검토 기준에 연결하는 것입니다. 이 두 항목을 보완한 뒤 같은 커밋 쌍으로 다시 검증해야 합니다.
+후속 작업에서 문서 범위 검사, 관계 근거 입력, 주제별 소스 발췌와 지문 검사를 추가했습니다. 같은 커밋 쌍으로 수행한 결과와 남은 한계는 [설계 근거 재검증](libcamera-design-validation.md)에 기록합니다. 위 최초 실행 결과는 실패 사례를 포함하여 그대로 보존합니다.

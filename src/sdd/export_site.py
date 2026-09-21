@@ -39,7 +39,8 @@ def _html_path(rel: str) -> str:
 
 def _status(meta: dict) -> str:
     status = str(meta.get("status", "unrecorded"))
-    label = {"ok": "인용 검사 통과", "needs-review": "인용 검사 확인 필요"}.get(status, "인용 검사 미기록")
+    check_name = "자동 검사" if meta.get("semantic_review") else "인용 검사"
+    label = {"ok": f"{check_name} 통과", "needs-review": f"{check_name} 확인 필요"}.get(status, f"{check_name} 미기록")
     return f'<span class="review-state">사람 검토 전</span><span>{label} · <code>{html.escape(status)}</code></span>'
 
 
@@ -98,7 +99,8 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
     out = (out or cfg.build_dir / "site").resolve()
     if out == cfg.sdd_dir.resolve() or out in cfg.sdd_dir.resolve().parents:
         raise RuntimeError("Site output must be separate from the Markdown source directory")
-    sections = {_path(s["output"]): s for s in cfg.sections() if s.get("output")}
+    sections = {_path(s.get("output") or ("scenarios/index.md" if s.get("kind") == "per-scenario"
+                                         else f"{s['id']}.md")): s for s in cfg.sections()}
     missing = [rel for rel, section in sections.items()
                if section.get("kind") != "manual" and not (cfg.sdd_dir / rel).is_file()]
     if missing:
@@ -142,6 +144,11 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
         page_title = _title_of_text(body)
         body = re.sub(r"^\s*# .+\n", "", body, count=1)
         section = sections.get(rel, {})
+        if section and section.get("kind") != "manual":
+            from .evidence import fingerprint, requires_fingerprint
+            if requires_fingerprint(section) or meta.get("evidence_fingerprint"):
+                if model is None or meta.get("evidence_fingerprint") != fingerprint(model, section):
+                    raise RuntimeError(f"Design evidence changed; regenerate page before publishing: {rel}")
         if section and section.get("kind", "prose") == "prose":
             if model and meta.get("source_commit") != model.meta.get("source_commit"):
                 raise RuntimeError(f"Facts and page source commits differ: {rel}")

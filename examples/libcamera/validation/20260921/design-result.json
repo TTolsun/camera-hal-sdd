@@ -1,0 +1,246 @@
+{
+  "base": "0a881d263755d97d912c5fb5302c8de095cd5148",
+  "head": "279d355ef8f7a4f98bb0a3004c0f788387814506",
+  "input_mode": "reuse previously built and extracted facts; collect new pinned source excerpts",
+  "strict_exit_code": 2,
+  "human_review": "pending",
+  "runs": {
+    "a": {
+      "evidence_count": 17,
+      "evidence_gaps": [],
+      "checks": {
+        "camera-model_responsibility": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "source-bound-contract"
+        },
+        "camera-model_state": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "source-bound-contract"
+        },
+        "camera-model_request": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "source-bound-contract"
+        },
+        "camera-model_lifetime": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "source-bound-contract"
+        },
+        "camera-model_shutdown": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "source-bound-contract"
+        },
+        "camera-model_concurrency": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "source-bound-contract"
+        },
+        "pipeline-handler": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "generated-prose"
+        },
+        "ipa": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "generated-prose"
+        },
+        "ipu3-lsc": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "extracted-structure"
+        }
+      },
+      "old_prose_findings": [
+        "현재 설명 입력에 제공되지 않은 위치를 인용했습니다: libcamera::ipa::lsc.h:27, libcamera::ipa::lsc.h:31",
+        "추출 사실에서 확인되지 않는 한정 이름: libcamera::ipa::lsc::LscAlgorithm"
+      ],
+      "diagram_sha256": "30d3171da403047bf25e3a25825c5c7405990d070b19f7a7a5e7c9ccb102fd47",
+      "site_repeat_identical": true,
+      "diagram_nodes": 9,
+      "diagram_edges": 4
+    },
+    "b": {
+      "evidence_count": 17,
+      "evidence_gaps": [],
+      "checks": {
+        "camera-model_responsibility": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "source-bound-contract"
+        },
+        "camera-model_state": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "source-bound-contract"
+        },
+        "camera-model_request": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "source-bound-contract"
+        },
+        "camera-model_lifetime": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "source-bound-contract"
+        },
+        "camera-model_shutdown": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "source-bound-contract"
+        },
+        "camera-model_concurrency": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "source-bound-contract"
+        },
+        "pipeline-handler": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "generated-prose"
+        },
+        "ipa": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "generated-prose"
+        },
+        "ipu3-lsc": {
+          "status": "ok",
+          "findings": [],
+          "facts_omitted": [],
+          "mode": "extracted-structure"
+        }
+      },
+      "old_prose_findings": [
+        "추출된 기반 클래스가 없는 libcamera::ipa::ipu3::IPAActiveState에 상속을 주장했습니다."
+      ],
+      "diagram_sha256": "0a1ac777eaefd9e7a2523f27f1597755bb84a4767ea3ace60b4b0c6c7e71d470",
+      "site_repeat_identical": true,
+      "diagram_nodes": 11,
+      "diagram_edges": 8
+    }
+  },
+  "coverage_findings": [
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPAActiveState::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/a/source/src/ipa/ipu3/ipa_context.h:46:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPAActiveState::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/b/source/src/ipa/ipu3/ipa_context.h:47:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPAFrameContext::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/a/source/src/ipa/ipu3/ipa_context.h:59:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPAFrameContext::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/b/source/src/ipa/ipu3/ipa_context.h:61:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/a/source/src/ipa/ipu3/ipa_context.h:32:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/a/source/src/ipa/ipu3/ipa_context.h:38:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/b/source/src/ipa/ipu3/ipa_context.h:33:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "entity-outside-document-scope",
+      "kind": "class",
+      "name": "libcamera::ipa::ipu3::IPASessionConfiguration::(unnamed struct at /home/baboess/work/libcamera-ab-validation-20260921/b/source/src/ipa/ipu3/ipa_context.h:39:2)",
+      "files": [
+        "src/ipa/ipu3/ipa_context.h"
+      ]
+    },
+    {
+      "reason": "no-extracted-entity",
+      "kind": "file",
+      "name": "src/ipa/ipu3/algorithms/meson.build",
+      "files": [
+        "src/ipa/ipu3/algorithms/meson.build"
+      ]
+    },
+    {
+      "reason": "no-extracted-entity",
+      "kind": "file",
+      "name": "src/ipa/ipu3/ipa_context.cpp",
+      "files": [
+        "src/ipa/ipu3/ipa_context.cpp"
+      ]
+    }
+  ],
+  "lsc_scope_gap_resolved": true,
+  "diagram_changed": true,
+  "tests": {
+    "command": ".venv/Scripts/python.exe -m pytest -q",
+    "passed": 80
+  },
+  "generator_base_commit": "ac1568689d007be5e8af90884ca685f70f84b5cd",
+  "generator_worktree_changed": true,
+  "implementation_sha256": {
+    "src/sdd/evidence.py": "950c39a846a45ec639389770d64fa22b48c39d9a23b6c4b237e8312328dc26d1",
+    "src/sdd/semantic.py": "b590a6b008759020e52f0e12d172a1a4ff4b92553d6c527705a5f2108cdc489e",
+    "src/sdd/generate.py": "ff04e90513ce841f8bbd1d8d8bce9fe567751249296b393013efef0346906a6d",
+    "examples/libcamera/config/sections.yaml": "2ee5a1a778317291e93cc6897fc1e2fa9f865792d577d42007e83d1ef84a36d0"
+  },
+  "model": [
+    {
+      "name": "qwen3.5:4b",
+      "digest": "2a654d98e6fba55d452b7043684e9b57a947e393bbffa62485a7aac05ee4eefd"
+    }
+  ]
+}

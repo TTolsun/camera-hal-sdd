@@ -106,12 +106,16 @@ class KnowledgeModel:
     defines: dict[str, Define] = field(default_factory=dict)
     scenarios: dict[str, Scenario] = field(default_factory=dict)
     includes: list[IncludeEdge] = field(default_factory=list)
+    evidence: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     # ---- 조회 ------------------------------------------------------------
 
     def citations(self) -> set[str]:
         """LLM 출력이 인용해도 되는 file:line 집합."""
         out: set[str] = set()
+        for record in self.evidence.values():
+            if record.get("status") == "available" and record.get("commit") == self.meta.get("source_commit"):
+                out.add(f"{record['file']}:{record['line']}")
         for c in self.classes.values():
             if c.loc:
                 out.add(c.loc.cite())
@@ -173,6 +177,7 @@ class KnowledgeModel:
             return Location(**x) if x else None
 
         m = cls(meta=d.get("meta", {}))
+        m.evidence = d.get("evidence", {})
         for name, c in (d.get("classes") or {}).items():
             m.classes[name] = ClassInfo(
                 name=c["name"], loc=loc(c.get("loc")), package=c.get("package", ""),
