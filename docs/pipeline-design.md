@@ -34,6 +34,7 @@
 - 가상 함수 호출은 정적으로 확정되지 않으므로 기반 구현과 override 를 모두 "virtual 후보" 로 표시합니다. `Base::method()` 처럼 한정된 호출은 토큰에서 `::` 를 보고 정적 호출로 처리합니다.
 - 함수 포인터 멤버(`callbacks_->process_capture_result`)와 `std::function` 호출은 "정적 추적 불가" 로 표시하고 `unresolved` 를 셉니다. HAL 콜백 경계와 스레드 경계가 문서에 드러나는 지점입니다.
 - 얻지 못하는 것: 템플릿 관계, 조건 분기 블록(alt/loop), include 그래프, 패키지 다이어그램. 운영 환경에서는 clang-uml 을 설치하는 것을 권장합니다.
+- 패키지는 선언 파일 경로의 앞 `facts.package_depth` 개 디렉터리로 묶습니다. 기본값 1 은 최상위 디렉터리 하나로 묶으므로, 소스가 `src/` 와 `include/` 아래로만 나뉘는 프로젝트에서는 패키지가 두세 개로 뭉쳐서 개요의 패키지 표가 쓸모없어집니다. libcamera 예제는 3 으로 두어 `src/ipa/ipu3`, `src/libcamera/pipeline` 같은 검토 단위를 얻습니다.
 - `examples/mini-hal/stubs/` 는 C++ 툴체인이 없는 머신에서만 필요한 파싱 전용 표준 라이브러리 선언입니다. 실제 HAL 에서는 NDK sysroot 의 libc++ 가 compile DB 에 들어오므로 쓰지 않습니다.
 
 ## 5. 사실 모델과 인용 규칙

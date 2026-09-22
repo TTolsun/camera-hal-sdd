@@ -293,15 +293,27 @@ def mermaid_class(model: KnowledgeModel) -> str:
     return "\n".join(parts)
 
 
+def package_of(file: str, depth: int) -> str:
+    """패키지 = 선언 파일 경로의 앞 depth 개 디렉터리.
+
+    clang-uml 의 package_type: directory 와 같은 규칙이되, 깊이를 설정으로 정한다.
+    경로가 depth 보다 얕으면 그 파일이 들어 있는 디렉터리까지만 쓰고, 루트 바로 아래 파일은
+    "(root)" 로 묶는다. 깊이를 올려도 얕은 트리가 빈 이름을 만들지 않게 하려는 처리다.
+    """
+    parts = Path(file).parts
+    if len(parts) > depth:
+        return "/".join(parts[:depth])
+    return "/".join(parts[:-1]) or "(root)"
+
+
 def collect(model: KnowledgeModel, cfg: Config, entries: list[dict[str, Any]]) -> dict[str, int]:
     g = build_graph(cfg, entries)
     root = cfg.source_root.resolve()
 
-    # 패키지 = 선언 파일의 첫 디렉터리. clang-uml 의 package_type: directory 와 같은 규칙.
+    depth = max(1, cfg.package_depth)
     for c in model.classes.values():
         if c.loc and not c.package:
-            parts = Path(c.loc.file).parts
-            c.package = parts[0] if len(parts) > 1 else "(root)"
+            c.package = package_of(c.loc.file, depth)
         if c.package:
             p = model.packages.setdefault(c.package, PackageInfo(name=c.package, path=c.package))
             if c.name not in p.classes:

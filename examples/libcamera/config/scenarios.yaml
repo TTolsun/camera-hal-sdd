@@ -1,3 +1,31 @@
-# 대상 SHA의 정의와 파서가 추출한 시그니처를 대조한 뒤 진입점을 추가한다.
-# 빈 목록은 호출 흐름을 검증했다는 뜻이 아니다.
-scenarios: []
+# libclang 대체 경로(tools.clang_uml: none)가 이 진입점에서 호출 순서를 추적한다.
+# 아래 시그니처는 대상 SHA 의 정의와 대조해야 한다. 맞지 않으면 extract 로그가
+# "진입 함수를 찾지 못했습니다" 와 missing_entries 개수를 보고한다. 그 경고를 무시하면 안 된다.
+# 목록에 있다는 것은 정적 호출 순서를 추출했다는 뜻이고, 실행으로 검증했다는 뜻은 아니다.
+
+# glob 은 clang-uml 경로에서만 쓰인다. 이 예제는 tools.clang_uml: none 이므로
+# compile DB 의 모든 translation unit 을 그래프에 넣고, glob 은 지정해도 무시된다.
+defaults:
+  depth: 4
+
+scenarios:
+  - id: manager_start
+    title: 카메라 탐색 (CameraManager::start)
+    from: "CameraManager::start()"
+
+  - id: configure
+    title: 스트림 구성 (Camera::configure)
+    from: "Camera::configure(CameraConfiguration *)"
+
+  - id: camera_start
+    title: 캡처 시작 (Camera::start)
+    from: "Camera::start(const ControlList *)"
+
+  - id: queue_request
+    title: 요청 제출 (Camera::queueRequest)
+    from: "Camera::queueRequest(Request *)"
+    depth: 5
+
+  - id: complete_request
+    title: 요청 완료 통지 (PipelineHandler::completeRequest)
+    from: "PipelineHandler::completeRequest(Request *)"

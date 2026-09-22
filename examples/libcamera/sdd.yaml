@@ -19,6 +19,11 @@ paths:
   templates: ../../templates
   style: ../../style
 
+facts:
+  # libcamera 는 src/ 와 include/ 아래로만 나뉘므로 1 이면 패키지가 3 개로 뭉친다.
+  # 3 이면 src/libcamera/pipeline, src/ipa/ipu3 처럼 검토 단위로 쓸 수 있는 18 개가 나온다.
+  package_depth: 3
+
 tools:
   clang_uml: none
 

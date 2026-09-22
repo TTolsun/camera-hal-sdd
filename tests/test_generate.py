@@ -182,3 +182,54 @@ def test_manual_page_evidence_files_flagged(tmp_cfg, sample_model):
     # manual 은 재생성 대상이 아니다.
     written = Generator(tmp_cfg, sample_model, Agent(tmp_cfg.agent)).run(impact=report)
     assert all(Path(p).name != "constraints.md" for p in written)
+
+
+def _overview_generator(tmp_cfg, sample_model):
+    """개요 표 검사용 Generator. 익명 구조체와 표에서 뺀 패키지를 섞어 둔다."""
+    from sdd.facts.model import ClassInfo, Location, PackageInfo, Relation
+
+    m = sample_model
+    m.packages["src/gen"] = PackageInfo(name="src/gen", path="src/gen", classes=["Generated"])
+    m.classes["Generated"] = ClassInfo(
+        name="Generated", loc=Location("src/gen/generated.h", 3), package="src/gen")
+    # libclang 이 익명 구조체에 붙이는 이름에는 파싱한 기계의 절대 경로가 들어간다.
+    anon = "Ctx::(unnamed struct at /home/someone/work/src/hal/ctx.h:33:2)"
+    m.classes[anon] = ClassInfo(name=anon, loc=Location("device/ctx.h", 33), package="device")
+    m.packages["device"].classes.append(anon)
+    m.relations.append(Relation(source="Generated", target="CameraDevice", type="association"))
+    m.relations.append(Relation(source="PipeThread", target="CameraDevice", type="inheritance"))
+    m.relations.append(Relation(source="FrameFactory", target="CameraDevice", type="association"))
+    tmp_cfg.agent.kind = "fake"
+    return Generator(tmp_cfg, m, _FakeAgent([_GOOD]))
+
+
+def test_패키지_표는_익명_구조체_이름을_싣지_않는다(tmp_cfg, sample_model):
+    gen = _overview_generator(tmp_cfg, sample_model)
+    table = gen._package_table(["device", "pipeline"])
+    assert "unnamed struct" not in table and "/home/someone" not in table
+    assert "`CameraDevice`" in table
+    # 클래스 수는 익명 구조체를 포함한 실제 개수를 그대로 보여 준다.
+    assert "| `device` | 2 |" in table
+
+
+def test_의존_표는_선택한_패키지만_방향마다_한_줄로_싣는다(tmp_cfg, sample_model):
+    gen = _overview_generator(tmp_cfg, sample_model)
+    deps = gen._package_deps_table(["device", "pipeline"])
+    assert "src/gen" not in deps                                  # 표에 없는 패키지는 의존에서도 뺀다
+    assert deps.count("`pipeline` → `device`") == 1               # 상속과 참조를 한 줄로 합친다
+    assert "| `pipeline` → `device` | 1 | 1 |" in deps
+
+
+def test_시나리오가_없으면_목차를_통과로_기록하지_않는다(tmp_cfg, sample_model):
+    sample_model.scenarios.clear()
+    sample_model.meta["callgraph"] = {"missing_entries": 3}
+    tmp_cfg.agent.kind = "fake"
+    gen = Generator(tmp_cfg, sample_model, _FakeAgent([_GOOD]))
+    sec = {"id": "scenarios", "title": "핵심 시나리오 시퀀스", "output": "scenarios/index.md",
+           "kind": "per-scenario", "lead": "고르세요.", "facts": {"scenarios": "*"},
+           "next": {"title": "다음", "link": "camera-model.md"}}
+    written = gen._per_scenario(sec, None)
+    text = written[-1].read_text(encoding="utf-8")
+    assert "status: needs-review" in text
+    assert "확인 필요: 추적한 시나리오가 없습니다." in text
+    assert "진입 함수 3 개를 추출에서 찾지 못했습니다." in text

@@ -35,6 +35,8 @@ _FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
 _YAML_FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
 _MAX_STEPS = 30
 _MAX_READING = 6
+# 개요의 의존 표에 싣는 방향 수. 넘으면 관계가 많은 순으로 자르고 자른 개수를 문서에 적는다.
+_MAX_DEPS = 20
 
 
 def slugify(text: str) -> str:
@@ -117,7 +119,7 @@ class Generator:
             t = self._package_table(facts["packages"])
             tables.append("## 패키지별 역할\n\n" + t)
             blocks.append(Block("packages", "### 패키지별 역할\n" + t, 0))
-            deps = self._package_deps_table()
+            deps = self._package_deps_table(facts["packages"])
             if deps:
                 tables.append("## 패키지 사이의 의존\n\n" + deps)
                 blocks.append(Block("package-deps", "### 패키지 사이의 의존\n" + deps, 1))
@@ -268,11 +270,22 @@ class Generator:
             out.append(self._write(path, page))
 
         index_body = "## 시나리오 목록\n\n" + "\n".join(rows)
+        # 시나리오가 하나도 없는 목차를 통과로 기록하면, 진입점 설정이 어긋난 상태가 문서에 드러나지 않는다.
+        index_verdict = Verdict(ok=bool(ordered))
+        if not ordered:
+            missing = int((self.model.meta.get("callgraph") or {}).get("missing_entries", 0))
+            reason = (f"설정한 진입 함수 {missing} 개를 추출에서 찾지 못했습니다."
+                      if missing else "scenarios.yaml 에 진입 함수가 없거나 추출이 시나리오를 만들지 않았습니다.")
+            index_verdict.notes.append(reason)
+            index_body += ("\n\n확인 필요: 추적한 시나리오가 없습니다. " + reason
+                           + " `sdd extract` 로그의 진입점 경고를 확인하고, `config/scenarios.yaml` 의"
+                             " 시그니처를 대상 커밋의 정의와 대조해야 합니다.")
         index_path = self.cfg.sdd_dir / sec.get("output", "scenarios/index.md")
         index_page = self._render(
             title=sec["title"], lead=sec.get("lead", ""), body=index_body, routes=routes,
-            evidence=self._evidence_lines([], [], Verdict(ok=True), []),
-            next_link=_next_of(sec), status="ok", omitted=[], extra={"section": sec["id"]}, page_path=index_path)
+            evidence=self._evidence_lines([], [], index_verdict, []),
+            next_link=_next_of(sec), status=_status(index_verdict), omitted=[],
+            extra={"section": sec["id"]}, page_path=index_path)
         out.append(self._write(index_path, index_page))
         return out
 
@@ -360,25 +373,39 @@ class Generator:
     def _package_table(self, pats: list[str]) -> str:
         rows = ["| 패키지 | 클래스 수 | 대표 클래스 |", "|---|---|---|"]
         for name in sorted(self.model.packages):
-            if not any(fnmatch.fnmatch(name, p) for p in pats):
+            if not _pkg_selected(name, pats):
                 continue
             p = self.model.packages[name]
-            reps = ", ".join(f"`{c}`" for c in p.classes[:5]) or "(없음)"
+            # 익명 구조체의 libclang 이름에는 파싱한 기계의 절대 경로가 들어간다. 대표 클래스에서 뺀다.
+            named = [c for c in p.classes if not _is_anonymous(c)]
+            reps = ", ".join(f"`{c}`" for c in named[:5]) or "(이름 있는 클래스 없음)"
             rows.append(f"| `{name}` | {len(p.classes)} | {reps} |")
         return "\n".join(rows)
 
-    def _package_deps_table(self) -> str:
+    def _package_deps_table(self, pats: list[str]) -> str:
+        # 패키지 표에 없는 이름은 의존 표에서도 뺀다. 두 표의 기준이 다르면 읽는 사람이
+        # 표에 없는 패키지를 근거 없이 추측하게 된다.
         pkg_of = {name: c.package for name, c in self.model.classes.items() if c.package}
         edges: Counter[tuple[str, str, str]] = Counter()
         for r in self.model.relations:
             s, t = pkg_of.get(r.source), pkg_of.get(r.target)
-            if s and t and s != t:
+            if s and t and s != t and _pkg_selected(s, pats) and _pkg_selected(t, pats):
                 edges[(s, t, r.type)] += 1
         if not edges:
             return ""
-        rows = ["| 방향 | 관계 종류 | 관계 수 |", "|---|---|---|"]
-        for (s, t, typ), n in sorted(edges.items(), key=lambda kv: (-kv[1], kv[0])):
-            rows.append(f"| `{s}` → `{t}` | {typ} | {n} |")
+        # 같은 방향의 상속과 필드 참조를 한 줄로 합친다. 종류마다 줄을 나누면 개요에서
+        # 읽어야 할 줄이 두 배가 되고, 어느 방향이 굵은지가 보이지 않는다.
+        pairs: dict[tuple[str, str], dict[str, int]] = {}
+        for (src, dst, typ), n in edges.items():
+            pairs.setdefault((src, dst), {"inheritance": 0, "association": 0})[typ] = n
+        ordered = sorted(pairs.items(), key=lambda kv: (-sum(kv[1].values()), kv[0]))
+        rows = ["| 방향 | 상속 | 필드 참조 |", "|---|---|---|"]
+        for (src, dst), counts in ordered[:_MAX_DEPS]:
+            rows.append(f"| `{src}` → `{dst}` | {counts['inheritance']} | {counts['association']} |")
+        if len(ordered) > _MAX_DEPS:
+            rows.append("")
+            rows.append(f"관계가 많은 순으로 {_MAX_DEPS} 개만 실었습니다. 나머지 {len(ordered) - _MAX_DEPS} 개 방향은"
+                        " `facts.json` 의 `relations` 에 있습니다.")
         return "\n".join(rows)
 
     def _entrypoint_table(self, pats: list[str]) -> str:
@@ -569,6 +596,20 @@ def _routes_from_headings(body: str) -> list[tuple[str, str]] | None:
     return [(f"{h} 절을 확인합니다.", f"#{slugify(h)}") for h in heads]
 
 
+
+
+def _pkg_selected(name: str, pats: list[str]) -> bool:
+    """패키지 이름 glob. 경로 구분자를 특별히 다루지 않으므로 `src/*` 는 `src/ipa/ipu3` 에도 걸린다."""
+    return any(fnmatch.fnmatch(name, p) for p in pats)
+
+
+def _is_anonymous(class_name: str) -> bool:
+    """libclang 이 익명 구조체·공용체에 붙이는 이름인지 판정한다.
+
+    이 이름에는 파싱한 기계의 절대 경로가 들어 있어서(예: `(unnamed struct at /home/.../ipa_context.h:33:2)`)
+    문서에 그대로 실으면 빌드 환경 경로가 노출되고 읽는 사람에게도 의미가 없다.
+    """
+    return "(unnamed " in class_name or "(anonymous " in class_name
 
 
 def _match_class(c: ClassInfo, sec: dict[str, Any]) -> bool:
