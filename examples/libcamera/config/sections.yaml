@@ -288,6 +288,11 @@ sections:
     classes:
     - libcamera::ipa::ipu3::algorithms::Lsc
     - libcamera::ipa::LscAlgorithm
+    - libcamera::ipa::ipu3::IPAContext
+    - libcamera::ipa::ipu3::IPAActiveState
+    - libcamera::ipa::ipu3::IPAFrameContext
+    - libcamera::ipa::lsc::ActiveState
+    - libcamera::ipa::lsc::FrameContext
   watch:
   - src/ipa/ipu3/algorithms/lsc.*
   - src/ipa/ipu3/algorithms/meson.build
