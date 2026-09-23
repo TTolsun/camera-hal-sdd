@@ -51,6 +51,25 @@ def section_diagram(cfg: Config, model: KnowledgeModel, section: dict) -> str:
                          strip_namespace=str(policy.get("strip_namespace", "")))
 
 
+def sequence_diagram(entry_owner: str, messages: list) -> str:
+    """시나리오 메시지 목록으로 Mermaid 시퀀스를 만든다.
+
+    facts 의 `Scenario.mermaid` 는 추출 시점의 전체 메시지로 만든 것이다. 생성 단계에서 표시를
+    줄인 목록으로 다시 그려야 문서의 호출 순서 목록과 그림이 같은 내용을 가리킨다.
+    """
+    parts = ["sequenceDiagram"]
+    seen: list[str] = []
+    for name in [entry_owner] + [m.dst for m in messages]:
+        if name and name not in seen:
+            seen.append(name)
+            parts.append(f"    participant {name}")
+    for m in messages:
+        arrow = "-->>" if m.note else "->>"
+        label = f"{m.name}()" + (f" [{m.note}]" if m.note else "")
+        parts.append(f"    {m.src}{arrow}{m.dst}: {label}")
+    return "\n".join(parts)
+
+
 def diagram_block(source: str) -> str:
     if not source:
         return ""

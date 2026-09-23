@@ -8,6 +8,12 @@
 # compile DB 의 모든 translation unit 을 그래프에 넣고, glob 은 지정해도 무시된다.
 defaults:
   depth: 4
+  # 표시에서 뺄 호출. 사실에서 지우지 않고 문서의 호출 순서와 그림에만 적용하며,
+  # 뺀 개수는 문서에 적는다. libcamera 의 LOG() 매크로와 Extensible 의 d-pointer 접근자는
+  # 호출 그래프의 대부분을 차지해서, 걸러내지 않으면 실제 흐름이 묻힌다.
+  hide:
+    owners: ["log", "LogMessage", "LogMessageAbortGuard"]
+    names: ["_d", "_log", "isLogSeverityEnabled", "stream", "basename"]
 
 scenarios:
   - id: manager_start

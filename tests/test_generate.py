@@ -233,3 +233,61 @@ def test_시나리오가_없으면_목차를_통과로_기록하지_않는다(tm
     assert "status: needs-review" in text
     assert "확인 필요: 추적한 시나리오가 없습니다." in text
     assert "진입 함수 3 개를 추출에서 찾지 못했습니다." in text
+
+
+def _scenario_cfg(tmp_cfg, body: str):
+    (tmp_cfg.config_dir / "scenarios.yaml").write_text(body, encoding="utf-8")
+
+
+def _two_scenario_model(sample_model):
+    from sdd.facts.model import Location, Message, Scenario
+
+    sample_model.scenarios["b_second"] = Scenario(
+        id="b_second", title="두 번째", entry="CameraDevice::flush()",
+        participants=["CameraDevice"],
+        messages=[Message("CameraDevice", "PipeThread", "enqueue", Location("device/CameraDevice.cpp", 400))])
+    sample_model.scenarios["a_first"] = Scenario(
+        id="a_first", title="첫 번째", entry="CameraDevice::open()",
+        participants=["CameraDevice"],
+        messages=[
+            Message("CameraDevice", "Log", "trace", Location("device/CameraDevice.cpp", 10)),
+            Message("CameraDevice", "RequestManager", "submit", Location("device/CameraDevice.cpp", 20)),
+            Message("RequestManager", "FrameFactory", "_d", Location("pipeline/FrameFactory.cpp", 30)),
+        ])
+    del sample_model.scenarios["process_capture_request"]
+    return sample_model
+
+
+def test_시나리오는_설정한_순서대로_이어진다(tmp_cfg, sample_model):
+    _scenario_cfg(tmp_cfg, "scenarios:\n  - id: a_first\n    from: CameraDevice::open()\n"
+                           "  - id: b_second\n    from: CameraDevice::flush()\n")
+    tmp_cfg.agent.kind = "fake"
+    gen = Generator(tmp_cfg, _two_scenario_model(sample_model), _FakeAgent([_GOOD]))
+    sec = {"id": "scenarios", "title": "시나리오", "output": "scenarios/index.md", "kind": "per-scenario",
+           "lead": "고르세요.", "facts": {"scenarios": "*"}, "next": {"title": "다음", "link": "camera-model.md"}}
+    gen._per_scenario(sec, None)
+    first = (tmp_cfg.sdd_dir / "scenarios" / "a_first.md").read_text(encoding="utf-8")
+    # 이름 순이면 a_first 다음이 b_second 가 아니라 목록으로 갔을 것이다.
+    assert "다음 단계: [두 번째](b_second.md)" in first
+    assert [s[0] for s in gen._ordered_scenarios()] == ["a_first", "b_second"]
+
+
+def test_hide_규칙은_표시만_줄이고_뺀_개수를_적는다(tmp_cfg, sample_model):
+    _scenario_cfg(tmp_cfg, "defaults:\n  hide:\n    owners: [\"Log\"]\n    names: [\"_d\"]\n"
+                           "scenarios:\n  - id: a_first\n    from: CameraDevice::open()\n"
+                           "  - id: b_second\n    from: CameraDevice::flush()\n")
+    tmp_cfg.agent.kind = "fake"
+    model = _two_scenario_model(sample_model)
+    gen = Generator(tmp_cfg, model, _FakeAgent([_GOOD]))
+    shown, hidden = gen._visible_messages(model.scenarios["a_first"])
+    assert [m.name for m in shown] == ["submit"]
+    assert hidden == 2
+    sec = {"id": "scenarios", "title": "시나리오", "output": "scenarios/index.md", "kind": "per-scenario",
+           "lead": "고르세요.", "facts": {"scenarios": "*"}, "next": {"title": "다음", "link": "camera-model.md"}}
+    gen._per_scenario(sec, None)
+    page = (tmp_cfg.sdd_dir / "scenarios" / "a_first.md").read_text(encoding="utf-8")
+    assert "`RequestManager::submit()`" in page
+    assert "trace()" not in page and "_d()" not in page
+    assert "표시에서 뺀 호출이 2 개 있습니다." in page
+    # 사실은 그대로 남는다.
+    assert len(model.scenarios["a_first"].messages) == 3
