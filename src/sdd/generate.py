@@ -29,7 +29,7 @@ from .llm import Agent
 from .manuscript import describe, lint, unwrap
 from .validate import Verdict, check, extract_citations, normalize_citations, strip_echo, strip_headings
 from .evidence import contract_text, fingerprint, requires_fingerprint, topic_blocks
-from .semantic import normalize_symbols, relation_facts, structural_text, review as semantic_review
+from .semantic import known_names, normalize_symbols, relation_facts, structural_text, review as semantic_review
 
 _FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
 _YAML_FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
@@ -79,6 +79,9 @@ class Generator:
         self.section_tpl = (cfg.prompts_dir / "section.md").read_text(encoding="utf-8")
         self.page_tpl = (cfg.templates_dir / "page.md").read_text(encoding="utf-8")
         self.allowed = model.citations()
+        # 본문에서 코드 표기 없이 나오면 안 되는 이름. 한정 이름과 마지막 마디를 모두 본다.
+        self.symbols = {n for n in known_names(model) if n}
+        self.symbols |= {n.rsplit("::", 1)[-1] for n in set(self.symbols) if "::" in n}
         self.reviews: dict[str, dict] = {}
         # routes 표의 링크 글자: 페이지 링크는 섹션 제목, 앵커 링크는 본문의 ## 제목 원문을 쓴다.
         self.page_titles = {sec.get("output", f"{sec['id']}.md"): sec["title"] for sec in cfg.sections()}
@@ -394,7 +397,7 @@ class Generator:
             verdict = check(text, self.allowed, require=self.cfg.require_citations)
             cite_failed = not verdict.ok
             # 인용과 별개로 문장 형태 위반(종결어미, 대화체, 프롬프트 누설)도 반려 사유다.
-            problems = lint(text)
+            problems = lint(text, self.symbols)
             if problems:
                 verdict.ok = False
                 verdict.notes.extend(describe(problems))
