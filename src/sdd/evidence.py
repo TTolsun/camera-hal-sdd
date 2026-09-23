@@ -15,6 +15,16 @@ from .config import Config
 from .facts.model import KnowledgeModel
 
 
+# 문서에 실리는 내용에는 영향이 없고, 페이지 배치와 영향 분석에만 쓰는 설정.
+# 지문에 넣으면 메뉴 분류나 다음 문서 링크만 바꿔도 근거가 달라진 것으로 판정되어,
+# 근거가 고정된 문서를 모델로 다시 만들어야 한다.
+#   group  - 사이트 왼쪽 메뉴에서 묶을 제목
+#   routes - "지금 확인할 내용" 표
+#   next   - 페이지 끝의 다음 문서 링크
+#   watch  - 재생성 대상을 고르는 경로 glob
+_PRESENTATION_KEYS = ("group", "routes", "next", "watch")
+
+
 def requires_fingerprint(section: dict) -> bool:
     return bool(section.get("semantic_review") or section.get("design_topics") or section.get("narration") == "facts")
 
@@ -114,7 +124,8 @@ def fingerprint(model: KnowledgeModel, sec: dict) -> str:
     from .matching import matches_symbol
     names = {n for n in model.classes if matches_symbol(n, sec.get("facts", {}).get("classes", []))}
     serialized = model.to_dict()
-    data = {"section": sec, "classes": {n: serialized["classes"][n] for n in sorted(names)},
+    section = {k: v for k, v in sec.items() if k not in _PRESENTATION_KEYS}
+    data = {"section": section, "classes": {n: serialized["classes"][n] for n in sorted(names)},
             "functions": {n: v for n, v in serialized["functions"].items()
                           if matches_symbol(n, sec.get("facts", {}).get("functions", []))},
             "relations": sorted((r.source, r.target, r.type) for r in model.relations if r.source in names),
