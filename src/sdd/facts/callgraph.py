@@ -121,6 +121,56 @@ def _walk_all(cursor: cindex.Cursor, root: Path):
         yield from _walk_all(child, root)
 
 
+def _classify_call(node: cindex.Cursor, ref: cindex.Cursor | None, loc: Location | None,
+                   fd_owner: str, root: Path) -> Call | None:
+    """이 호출 표현식이 어떤 종류의 호출인지 판정한다. 문서에 올릴 것이 없으면 None 을 돌려준다."""
+    if ref is None:
+        return Call("", _callee_expr_name(node) or "(알 수 없는 호출)", "?", loc, kind="unresolved")
+    if ref.kind in (cindex.CursorKind.FIELD_DECL, cindex.CursorKind.VAR_DECL, cindex.CursorKind.PARM_DECL):
+        # 함수 포인터 멤버 호출: callbacks_->process_capture_result(...)
+        return Call("", ref.spelling, _owner_of(ref, root), loc, kind="pointer")
+    if ref.kind == cindex.CursorKind.CXX_METHOD and ref.spelling == "operator()" and not _under(ref, root):
+        # std::function 같은 호출 가능 객체: handler_(*frame)
+        return Call("", _callee_expr_name(node) or "callable", fd_owner, loc, kind="callable")
+    if ref.kind not in (_METHOD_KINDS | _FUNCTION_KINDS) or not _under(ref, root):
+        return None
+    if ref.kind == cindex.CursorKind.CONSTRUCTOR and ref.semantic_parent is not None             and not ref.semantic_parent.spelling:
+        return None
+    is_virtual = (ref.kind == cindex.CursorKind.CXX_METHOD and ref.is_virtual_method()
+                  and not _is_qualified_call(node))
+    return Call(ref.get_usr(), ref.spelling, _owner_of(ref, root), loc,
+                kind="virtual" if is_virtual else "direct")
+
+
+def _deferred_targets(node: cindex.Cursor, root: Path, callee_usr: str) -> list[cindex.Cursor]:
+    """호출 인자로 넘어간 메서드·함수 선언을 모은다.
+
+    `invokeMethod(&PipelineHandler::queueRequest, ...)` 나 `connect(&Class::slot)` 처럼 메서드를
+    값으로 넘기면, 그 메서드는 이 호출 자리에서 실행되지 않는다. 실행 시점과 스레드는 큐나 신호
+    구현이 정하므로 정적 추적으로는 순서를 알 수 없다. 대상 이름은 알 수 있으므로 경계로 기록한다.
+    중첩된 호출 표현식은 바깥 순회가 따로 보기 때문에 여기서는 들어가지 않는다.
+    """
+    found: list[cindex.Cursor] = []
+    seen: set[str] = set()
+
+    def walk(n: cindex.Cursor) -> None:
+        for child in n.get_children():
+            if child.kind == cindex.CursorKind.CALL_EXPR:
+                continue
+            if child.kind == cindex.CursorKind.DECL_REF_EXPR:
+                target = child.referenced
+                if (target is not None and target.kind in (_METHOD_KINDS | _FUNCTION_KINDS)
+                        and _under(target, root)):
+                    usr = target.get_usr()
+                    if usr and usr != callee_usr and usr not in seen:
+                        seen.add(usr)
+                        found.append(target)
+            walk(child)
+
+    walk(node)
+    return found
+
+
 def build_graph(cfg: Config, entries: list[dict[str, Any]]) -> Graph:
     index = cindex.Index.create()
     root = cfg.source_root.resolve()
@@ -161,26 +211,14 @@ def build_graph(cfg: Config, entries: list[dict[str, Any]]) -> Graph:
                 loc = (Location(file=relpath(node.location.file.name, root), line=node.location.line)
                        if node.location.file else None)
                 ref = node.referenced
-                if ref is None:
-                    fd.calls.append(Call("", _callee_expr_name(node) or "(알 수 없는 호출)", "?", loc, kind="unresolved"))
-                    continue
-                if ref.kind in (cindex.CursorKind.FIELD_DECL, cindex.CursorKind.VAR_DECL, cindex.CursorKind.PARM_DECL):
-                    # 함수 포인터 멤버 호출: callbacks_->process_capture_result(...)
-                    fd.calls.append(Call("", ref.spelling, _owner_of(ref, root), loc, kind="pointer"))
-                    continue
-                if ref.kind == cindex.CursorKind.CXX_METHOD and ref.spelling == "operator()" and not _under(ref, root):
-                    # std::function 같은 호출 가능 객체: handler_(*frame)
-                    fd.calls.append(Call("", _callee_expr_name(node) or "callable", fd.owner, loc, kind="callable"))
-                    continue
-                if ref.kind not in (_METHOD_KINDS | _FUNCTION_KINDS) or not _under(ref, root):
-                    continue
-                if ref.kind == cindex.CursorKind.CONSTRUCTOR and ref.semantic_parent is not None \
-                        and not ref.semantic_parent.spelling:
-                    continue
-                is_virtual = (ref.kind == cindex.CursorKind.CXX_METHOD and ref.is_virtual_method()
-                              and not _is_qualified_call(node))
-                fd.calls.append(Call(ref.get_usr(), ref.spelling, _owner_of(ref, root), loc,
-                                     kind="virtual" if is_virtual else "direct"))
+                call = _classify_call(node, ref, loc, fd.owner, root)
+                if call is not None:
+                    fd.calls.append(call)
+                # 인자로 넘어간 메서드는 이 자리에서 실행되지 않는다. 신호·큐 경계를 남긴다.
+                callee_usr = ref.get_usr() if ref is not None else ""
+                for target in _deferred_targets(node, root, callee_usr):
+                    fd.calls.append(Call(target.get_usr(), target.spelling, _owner_of(target, root),
+                                         loc, kind="deferred"))
             g.defs.setdefault(usr, fd)
 
     # override: 파생 클래스에 같은 displayname 의 메서드가 있으면 기반 메서드의 후보로 등록한다.
@@ -220,15 +258,24 @@ def find_entry(g: Graph, from_sig: str) -> FuncDef | None:
     return candidates[0] if candidates else None
 
 
-def trace(g: Graph, entry: FuncDef, depth: int) -> tuple[list[Message], int]:
+def trace(g: Graph, entry: FuncDef, depth: int) -> tuple[list[Message], int, int]:
     messages: list[Message] = []
     unresolved = 0
+    deferred = 0
 
     def visit(fd: FuncDef, level: int, path: set[str]) -> None:
-        nonlocal unresolved
+        nonlocal unresolved, deferred
         if level >= depth or len(messages) >= _MAX_MESSAGES:
             return
         for call in fd.calls:
+            if call.kind == "deferred":
+                # 대상은 알지만 이 자리에서 실행되지 않는다. 따라 들어가면 없는 순서를 만들게 된다.
+                deferred += 1
+                target = g.defs.get(call.callee_usr)
+                messages.append(Message(src=fd.owner, dst=(target.owner if target else call.callee_owner),
+                                        name=call.callee_name, loc=call.loc,
+                                        note="예약된 호출, 실행 순서는 정적으로 확인 불가"))
+                continue
             if call.kind in ("pointer", "callable", "unresolved"):
                 unresolved += 1
                 label = {"pointer": "함수 포인터, 정적 추적 불가", "callable": "콜백 객체, 정적 추적 불가",
@@ -260,7 +307,7 @@ def trace(g: Graph, entry: FuncDef, depth: int) -> tuple[list[Message], int]:
                     visit(t, level + 1, path | {t_usr})
 
     visit(entry, 0, {entry.usr})
-    return messages, unresolved
+    return messages, unresolved, deferred
 
 
 def mermaid_sequence(entry: FuncDef, messages: list[Message]) -> str:
@@ -337,11 +384,12 @@ def collect(model: KnowledgeModel, cfg: Config, entries: list[dict[str, Any]]) -
             print(f"[callgraph] 시나리오 {sc['id']}: 진입 함수를 찾지 못했습니다: {sc['from']}")
             stats["missing_entries"] += 1
             continue
-        messages, unresolved = trace(g, entry, int(sc.get("depth", 4) or 4))
+        messages, unresolved, deferred = trace(g, entry, int(sc.get("depth", 4) or 4))
         model.scenarios[sc["id"]] = Scenario(
             id=sc["id"], title=sc.get("title", sc["id"]), entry=sc["from"],
             participants=list(dict.fromkeys([entry.owner] + [m.dst for m in messages])),
-            messages=messages, mermaid=mermaid_sequence(entry, messages), unresolved=unresolved)
+            messages=messages, mermaid=mermaid_sequence(entry, messages),
+            unresolved=unresolved, deferred=deferred)
         stats["scenarios"] += 1
 
     diagrams = cfg.diagrams_dir

@@ -247,14 +247,16 @@ class Generator:
     def _per_scenario(self, sec: dict[str, Any], impact: ImpactReport | None) -> list[Path]:
         out: list[Path] = []
         ordered = self._ordered_scenarios()
-        rows = ["| 시나리오 | 진입점 | 단계 수 | 표시에서 뺀 호출 | 미해결 호출 |", "|---|---|---|---|---|"]
+        rows = ["| 시나리오 | 진입점 | 단계 수 | 표시에서 뺀 호출 | 예약된 호출 | 미해결 호출 |",
+                "|---|---|---|---|---|---|"]
         routes: list[tuple[str, str]] = []
         shown_by_id: dict[str, tuple[list[Any], int]] = {}
         for sid, sc in ordered:
             shown, hidden = self._visible_messages(sc)
             shown_by_id[sid] = (shown, hidden)
             # index.md 와 같은 디렉터리에 있으므로 파일 이름만 쓴다.
-            rows.append(f"| [{sc.title}]({sid}.md) | `{sc.entry}` | {len(shown)} | {hidden} | {sc.unresolved} |")
+            rows.append(f"| [{sc.title}]({sid}.md) | `{sc.entry}` | {len(shown)} | {hidden} "
+                        f"| {sc.deferred} | {sc.unresolved} |")
             routes.append((f"{sc.title} 흐름을 추적합니다.", f"scenarios/{sid}.md"))
 
         for idx, (sid, sc) in enumerate(ordered):
@@ -273,6 +275,12 @@ class Generator:
                 mermaid += (f"\n\n그림에는 앞의 {_MAX_SEQUENCE} 개 호출만 그렸습니다. 나머지 {len(shown) - _MAX_SEQUENCE} 개는"
                             " 아래 호출 순서와 `facts.json` 에서 확인하세요.")
             body_parts = [p for p in (mermaid, f"## 호출 순서\n\n{steps}", f"## 이 흐름에서 확인할 것\n\n{text}") if p]
+            if sc.deferred:
+                body_parts.append(
+                    f"확인 필요: 메서드를 인자로 넘겨 예약한 호출이 {sc.deferred} 개 있습니다. 위에서 `예약된 호출, 실행 순서는"
+                    " 정적으로 확인 불가` 로 표시한 단계가 그 자리입니다. 대상 메서드는 확인했지만, 실제 실행 시점과 스레드는"
+                    " 큐나 신호 구현이 정하므로 이 번호 목록은 그 지점 이후의 순서를 보장하지 않습니다. 이후 흐름은 예약을 받는"
+                    " 쪽의 구현에서 직접 확인해야 합니다.")
             if sc.unresolved:
                 body_parts.append(f"확인 필요: 가상 함수나 함수 포인터 때문에 정적으로 끊긴 호출이 {sc.unresolved} 개 있습니다. "
                                   "끊긴 지점 이후는 코드를 직접 따라가야 합니다.")

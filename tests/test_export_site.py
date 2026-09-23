@@ -232,3 +232,91 @@ def test_existing_generation_without_diagram_opt_in_accepts_large_models(tmp_cfg
         sample_model.classes[name] = ClassInfo(name)
     Generator(tmp_cfg, sample_model, Agent(tmp_cfg.agent)).run(['overview'])
     assert '<!-- sdd:class-diagram -->' not in (tmp_cfg.sdd_dir / 'overview.md').read_text(encoding='utf-8')
+
+
+def prepare_groups(cfg, model):
+    """group 이 있는 섹션과 시나리오 하위 페이지를 갖춘 최소 사이트."""
+    model.meta['source_commit'] = 'a' * 40
+    model.save(cfg.facts_path)
+    cfg.sections_file.write_text('''sections:
+  - id: device
+    output: device.md
+    title: Device
+    kind: prose
+    group: For Developers
+    facts:
+      classes: [CameraDevice]
+    next: {title: Flows, link: scenarios/index.md}
+  - id: scenarios
+    output: scenarios/index.md
+    title: Flows
+    kind: per-scenario
+    group: For Developers
+    facts:
+      scenarios: "*"
+    next: {title: Pipe, link: pipe.md}
+  - id: pipe
+    output: pipe.md
+    title: Pipe
+    kind: prose
+    group: For Vendors
+    facts:
+      classes: [PipeThread]
+    next: {title: Device, link: device.md}
+''', encoding='utf-8')
+    cfg.scenarios_file.write_text(
+        'scenarios:\n  - id: open\n    from: "CameraDevice::open()"\n'
+        '  - id: capture\n    from: "CameraDevice::processCaptureRequest()"\n', encoding='utf-8')
+    cfg.raw['site'] = {'title': 'Groups', 'source_url': 'https://github.com/example/source'}
+    cfg.sdd_dir.mkdir(parents=True)
+    (cfg.sdd_dir / 'scenarios').mkdir()
+    text = '---\nsource_commit: ' + 'a' * 40 + '\nstatus: ok\n---\n\n'
+    (cfg.sdd_dir / 'device.md').write_text(text + '# Device\n', encoding='utf-8')
+    (cfg.sdd_dir / 'pipe.md').write_text(text + '# Pipe\n', encoding='utf-8')
+    (cfg.sdd_dir / 'scenarios/index.md').write_text(text + '# Flows\n', encoding='utf-8')
+    # 파일 이름 순서(capture, open)와 설정 순서(open, capture)가 다르게 둔다.
+    (cfg.sdd_dir / 'scenarios/capture.md').write_text(text + '# 캡처 요청\n', encoding='utf-8')
+    (cfg.sdd_dir / 'scenarios/open.md').write_text(text + '# 디바이스 오픈\n', encoding='utf-8')
+
+
+def _nav_items(doc: str) -> list[str]:
+    import re
+    nav = re.search(r'<nav aria-label="문서 메뉴">(.*?)</nav>', doc, re.S).group(1)
+    items = []
+    for m in re.finditer(r'<p class="nav-group">(.*?)</p>|<a( class="nav-sub")?[^>]*>(.*?)</a>', nav):
+        if m.group(1):
+            items.append('[' + m.group(1) + ']')
+        else:
+            items.append(('  ' if m.group(2) else '') + m.group(3))
+    return items
+
+
+def test_메뉴는_설정한_그룹으로_나뉜다(tmp_cfg, sample_model):
+    prepare_groups(tmp_cfg, sample_model)
+    out = export_site(tmp_cfg)
+    items = _nav_items((out / 'device.html').read_text(encoding='utf-8'))
+    assert items.index('[For Developers]') < items.index('[For Vendors]')
+    assert items.count('[For Developers]') == 1 and items.count('[For Vendors]') == 1
+    assert items[items.index('[For Vendors]') + 1] == 'Pipe'
+
+
+def test_시나리오_하위_페이지는_목차_뒤에_호출_차례로_들여쓴다(tmp_cfg, sample_model):
+    prepare_groups(tmp_cfg, sample_model)
+    out = export_site(tmp_cfg)
+    items = _nav_items((out / 'device.html').read_text(encoding='utf-8'))
+    at = items.index('Flows')
+    # 파일 이름 순이면 캡처 요청이 먼저 온다. 설정 순서를 따라야 한다.
+    assert items[at + 1:at + 3] == ['  디바이스 오픈', '  캡처 요청']
+    # 같은 그룹 안에 있으므로 사이에 그룹 제목이 끼지 않는다.
+    assert '[For Vendors]' not in items[at:at + 3]
+
+
+def test_메뉴_그룹_순서는_설정이_정한다(tmp_cfg, sample_model):
+    prepare_groups(tmp_cfg, sample_model)
+    tmp_cfg.raw['site']['nav_groups'] = ['For Vendors', 'For Developers']
+    out = export_site(tmp_cfg)
+    items = _nav_items((out / 'device.html').read_text(encoding='utf-8'))
+    # 섹션 순서는 device(For Developers) 가 먼저지만 메뉴는 설정을 따른다.
+    assert items.index('[For Vendors]') < items.index('[For Developers]')
+    # 설정에 없는 그룹은 뒤에 붙지 않고 원래 자리를 지킨다 (시작하기는 맨 앞에 끼워 넣는다).
+    assert items[0] == '[시작하기]'

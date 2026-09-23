@@ -12,6 +12,9 @@
 #
 # watch: 소스 루트 기준 glob. 이 경로가 변경되면 섹션을 재생성 대상으로 잡는다.
 # facts.classes / facts.packages / facts.functions: fnmatch 패턴.
+# group: 사이트 왼쪽 메뉴에서 이 문서를 묶을 제목. 생략하면 sdd.yaml 의 site.nav_group 또는 "설계 문서" 로 묶는다.
+#        같은 그룹끼리 처음 나온 순서대로 모이므로, 섹션 순서를 바꿔도 제목이 두 번 나오지 않는다.
+#        그룹이 메뉴에 나오는 차례는 sdd.yaml 의 site.nav_groups 로 따로 정한다.
 # lead: 페이지 첫 문장. 독자가 먼저 할 일 또는 결론. 굵게 표시된다.
 # routes: "지금 확인할 내용 -> 이동할 절" 표. 생략하면 본문의 ## 제목에서 자동 생성한다.
 # next: 페이지 끝에 연결할 문서 하나.
