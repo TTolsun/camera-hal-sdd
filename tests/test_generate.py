@@ -52,7 +52,7 @@ def test_dry_run_generates_all_pages_with_frame(tmp_cfg, sample_model):
     agent = Agent(tmp_cfg.agent, dump_dir=tmp_cfg.build_dir / "prompts")
     written = Generator(tmp_cfg, sample_model, agent).run()
     names = sorted(p.relative_to(tmp_cfg.sdd_dir).as_posix() for p in written)
-    assert names == ["components.md", "feature-flags.md", "overview.md",
+    assert names == ["components.md", "feature-flags.md", "index.md", "overview.md",
                      "scenarios/index.md", "scenarios/process_capture_request.md", "threading.md"]
 
     overview = (tmp_cfg.sdd_dir / "overview.md").read_text(encoding="utf-8")
@@ -291,3 +291,39 @@ def test_hide_규칙은_표시만_줄이고_뺀_개수를_적는다(tmp_cfg, sam
     assert "표시에서 뺀 호출이 2 개 있습니다." in page
     # 사실은 그대로 남는다.
     assert len(model.scenarios["a_first"].messages) == 3
+
+
+def test_문서_안내는_섹션_정의로_만든다(tmp_cfg, sample_model):
+    (tmp_cfg.config_dir / "sections.yaml").write_text('''sections:
+  - id: index
+    title: 문서 안내
+    output: index.md
+    kind: index
+    lead: 아래 표에서 고르세요.
+    reader: 처음 여는 개발자
+    next: {title: Device, link: device.md}
+  - id: device
+    title: Device
+    output: device.md
+    kind: prose
+    lead: 클래스부터 확인하세요.
+    reader: 클래스를 수정하는 개발자
+    facts:
+      classes: [CameraDevice]
+    next: {title: 문서 안내, link: index.md}
+  - id: manual-page
+    title: 설계 결정 기록
+    output: decisions.md
+    kind: manual
+    next: {title: 문서 안내, link: index.md}
+''', encoding="utf-8")
+    tmp_cfg.agent.kind = "fake"
+    agent = _FakeAgent([_GOOD])
+    gen = Generator(tmp_cfg, sample_model, agent)
+    sec = next(s for s in tmp_cfg.sections() if s["id"] == "index")
+    page = gen._index_page(sec).read_text(encoding="utf-8")
+    assert "| [Device](device.md) | 클래스를 수정하는 개발자 | 클래스부터 확인하세요. |" in page
+    assert "index.md" not in page.split("## 문서 목록")[1]        # 자기 자신은 넣지 않는다
+    assert "decisions.md" not in page                            # 아직 없는 수동 문서로 링크하지 않는다
+    assert "status: ok" in page
+    assert agent.users == []                                     # LLM 을 부르지 않는다
