@@ -9,6 +9,12 @@
 defaults:
   glob: ["**/*.cpp", "**/*.cc"]
   depth: 4
+  # hide: 문서의 호출 순서와 시퀀스 그림에서 뺄 호출 (fnmatch). 사실에서는 지우지 않고
+  # 뺀 개수를 문서에 적는다. 로깅 매크로와 단순 접근자가 흐름을 덮을 때만 채운다.
+  # 이름은 프로젝트마다 다르므로 기본값은 비워 둔다.
+  # hide:
+  #   owners: ["Log", "Trace"]
+  #   names: ["ALOG*", "get*", "_d"]
 
 scenarios:
   - id: open_device

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import html
+import re
 
 from .config import Config
 from .matching import matches_symbol
@@ -49,6 +50,39 @@ def section_diagram(cfg: Config, model: KnowledgeModel, section: dict) -> str:
                          limit=int(policy.get("max_nodes", 16)),
                          direction=str(policy.get("direction", "LR")),
                          strip_namespace=str(policy.get("strip_namespace", "")))
+
+
+def _participant_id(name: str) -> str:
+    """Mermaid 참여자 식별자. 영숫자와 밑줄만 남긴다.
+
+    참여자 이름은 클래스 이름이거나, 클래스 밖 함수일 때는 파일 stem 이다. stem 에는 `-` 처럼
+    Mermaid 가 식별자로 받지 않는 글자가 들어올 수 있어서(`gstlibcamera-utils`) 그림이 깨진다.
+    """
+    cleaned = re.sub(r"[^0-9A-Za-z_]", "_", name).strip("_")
+    return cleaned or "unknown"
+
+
+def sequence_diagram(entry_owner: str, messages: list) -> str:
+    """시나리오 메시지 목록으로 Mermaid 시퀀스를 만든다.
+
+    facts 의 `Scenario.mermaid` 는 추출 시점의 전체 메시지로 만든 것이다. 생성 단계에서 표시를
+    줄인 목록으로 다시 그려야 문서의 호출 순서 목록과 그림이 같은 내용을 가리킨다.
+    """
+    parts = ["sequenceDiagram"]
+    seen: dict[str, str] = {}
+    for name in [entry_owner] + [m.dst for m in messages]:
+        if not name or name in seen:
+            continue
+        ident = _participant_id(name)
+        seen[name] = ident
+        parts.append(f"    participant {ident}" + (f" as {name}" if ident != name else ""))
+    for m in messages:
+        arrow = "-->>" if m.note else "->>"
+        label = f"{m.name}()" + (f" [{m.note}]" if m.note else "")
+        src = seen.get(m.src) or _participant_id(m.src)
+        parts.append(f"    {src}{arrow}{seen[m.dst]}: {label}")
+    return "\n".join(parts)
+
 
 
 def diagram_block(source: str) -> str:

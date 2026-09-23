@@ -75,12 +75,18 @@ def _nav_entries(mkdocs_yml: Path, sdd_dir: Path) -> list[tuple[str, str, str]]:
         walk(data.get("nav"), "")
     if not out:
         for p in sorted(sdd_dir.rglob("*.md")):
-            out.append(("", p.stem, p.relative_to(sdd_dir).as_posix()))
+            rel = p.relative_to(sdd_dir).as_posix()
+            # 시나리오 하위 페이지는 아래에서 제목과 순서를 붙여 넣는다. 여기서 파일 이름으로
+            # 먼저 넣으면 목차에 stem 이 제목으로 남는다.
+            if rel.startswith("scenarios/") and rel != "scenarios/index.md":
+                continue
+            out.append(("", p.stem, rel))
     # 시나리오 개별 페이지는 nav 에 없으므로 index 뒤에 붙인다.
     scen_dir = sdd_dir / "scenarios"
     if scen_dir.exists():
         idx = next((i for i, e in enumerate(out) if e[2] == "scenarios/index.md"), None)
-        extra = [("scenarios", _title_of(p), f"scenarios/{p.name}") for p in sorted(scen_dir.glob("*.md")) if p.name != "index.md"]
+        # 그룹은 비워서 시나리오 목차와 같은 그룹에 딸리게 한다.
+        extra = [("", _title_of(p), f"scenarios/{p.name}") for p in sorted(scen_dir.glob("*.md")) if p.name != "index.md"]
         if idx is not None:
             out[idx + 1:idx + 1] = extra
         else:

@@ -182,3 +182,112 @@ def test_manual_page_evidence_files_flagged(tmp_cfg, sample_model):
     # manual 은 재생성 대상이 아니다.
     written = Generator(tmp_cfg, sample_model, Agent(tmp_cfg.agent)).run(impact=report)
     assert all(Path(p).name != "constraints.md" for p in written)
+
+
+def _overview_generator(tmp_cfg, sample_model):
+    """개요 표 검사용 Generator. 익명 구조체와 표에서 뺀 패키지를 섞어 둔다."""
+    from sdd.facts.model import ClassInfo, Location, PackageInfo, Relation
+
+    m = sample_model
+    m.packages["src/gen"] = PackageInfo(name="src/gen", path="src/gen", classes=["Generated"])
+    m.classes["Generated"] = ClassInfo(
+        name="Generated", loc=Location("src/gen/generated.h", 3), package="src/gen")
+    # libclang 이 익명 구조체에 붙이는 이름에는 파싱한 기계의 절대 경로가 들어간다.
+    anon = "Ctx::(unnamed struct at /home/someone/work/src/hal/ctx.h:33:2)"
+    m.classes[anon] = ClassInfo(name=anon, loc=Location("device/ctx.h", 33), package="device")
+    m.packages["device"].classes.append(anon)
+    m.relations.append(Relation(source="Generated", target="CameraDevice", type="association"))
+    m.relations.append(Relation(source="PipeThread", target="CameraDevice", type="inheritance"))
+    m.relations.append(Relation(source="FrameFactory", target="CameraDevice", type="association"))
+    tmp_cfg.agent.kind = "fake"
+    return Generator(tmp_cfg, m, _FakeAgent([_GOOD]))
+
+
+def test_패키지_표는_익명_구조체_이름을_싣지_않는다(tmp_cfg, sample_model):
+    gen = _overview_generator(tmp_cfg, sample_model)
+    table = gen._package_table(["device", "pipeline"])
+    assert "unnamed struct" not in table and "/home/someone" not in table
+    assert "`CameraDevice`" in table
+    # 클래스 수는 익명 구조체를 포함한 실제 개수를 그대로 보여 준다.
+    assert "| `device` | 2 |" in table
+
+
+def test_의존_표는_선택한_패키지만_방향마다_한_줄로_싣는다(tmp_cfg, sample_model):
+    gen = _overview_generator(tmp_cfg, sample_model)
+    deps = gen._package_deps_table(["device", "pipeline"])
+    assert "src/gen" not in deps                                  # 표에 없는 패키지는 의존에서도 뺀다
+    assert deps.count("`pipeline` → `device`") == 1               # 상속과 참조를 한 줄로 합친다
+    assert "| `pipeline` → `device` | 1 | 1 |" in deps
+
+
+def test_시나리오가_없으면_목차를_통과로_기록하지_않는다(tmp_cfg, sample_model):
+    sample_model.scenarios.clear()
+    sample_model.meta["callgraph"] = {"missing_entries": 3}
+    tmp_cfg.agent.kind = "fake"
+    gen = Generator(tmp_cfg, sample_model, _FakeAgent([_GOOD]))
+    sec = {"id": "scenarios", "title": "핵심 시나리오 시퀀스", "output": "scenarios/index.md",
+           "kind": "per-scenario", "lead": "고르세요.", "facts": {"scenarios": "*"},
+           "next": {"title": "다음", "link": "camera-model.md"}}
+    written = gen._per_scenario(sec, None)
+    text = written[-1].read_text(encoding="utf-8")
+    assert "status: needs-review" in text
+    assert "확인 필요: 추적한 시나리오가 없습니다." in text
+    assert "진입 함수 3 개를 추출에서 찾지 못했습니다." in text
+
+
+def _scenario_cfg(tmp_cfg, body: str):
+    (tmp_cfg.config_dir / "scenarios.yaml").write_text(body, encoding="utf-8")
+
+
+def _two_scenario_model(sample_model):
+    from sdd.facts.model import Location, Message, Scenario
+
+    sample_model.scenarios["b_second"] = Scenario(
+        id="b_second", title="두 번째", entry="CameraDevice::flush()",
+        participants=["CameraDevice"],
+        messages=[Message("CameraDevice", "PipeThread", "enqueue", Location("device/CameraDevice.cpp", 400))])
+    sample_model.scenarios["a_first"] = Scenario(
+        id="a_first", title="첫 번째", entry="CameraDevice::open()",
+        participants=["CameraDevice"],
+        messages=[
+            Message("CameraDevice", "Log", "trace", Location("device/CameraDevice.cpp", 10)),
+            Message("CameraDevice", "RequestManager", "submit", Location("device/CameraDevice.cpp", 20)),
+            Message("RequestManager", "FrameFactory", "_d", Location("pipeline/FrameFactory.cpp", 30)),
+        ])
+    del sample_model.scenarios["process_capture_request"]
+    return sample_model
+
+
+def test_시나리오는_설정한_순서대로_이어진다(tmp_cfg, sample_model):
+    _scenario_cfg(tmp_cfg, "scenarios:\n  - id: a_first\n    from: CameraDevice::open()\n"
+                           "  - id: b_second\n    from: CameraDevice::flush()\n")
+    tmp_cfg.agent.kind = "fake"
+    gen = Generator(tmp_cfg, _two_scenario_model(sample_model), _FakeAgent([_GOOD]))
+    sec = {"id": "scenarios", "title": "시나리오", "output": "scenarios/index.md", "kind": "per-scenario",
+           "lead": "고르세요.", "facts": {"scenarios": "*"}, "next": {"title": "다음", "link": "camera-model.md"}}
+    gen._per_scenario(sec, None)
+    first = (tmp_cfg.sdd_dir / "scenarios" / "a_first.md").read_text(encoding="utf-8")
+    # 이름 순이면 a_first 다음이 b_second 가 아니라 목록으로 갔을 것이다.
+    assert "다음 단계: [두 번째](b_second.md)" in first
+    assert [s[0] for s in gen._ordered_scenarios()] == ["a_first", "b_second"]
+
+
+def test_hide_규칙은_표시만_줄이고_뺀_개수를_적는다(tmp_cfg, sample_model):
+    _scenario_cfg(tmp_cfg, "defaults:\n  hide:\n    owners: [\"Log\"]\n    names: [\"_d\"]\n"
+                           "scenarios:\n  - id: a_first\n    from: CameraDevice::open()\n"
+                           "  - id: b_second\n    from: CameraDevice::flush()\n")
+    tmp_cfg.agent.kind = "fake"
+    model = _two_scenario_model(sample_model)
+    gen = Generator(tmp_cfg, model, _FakeAgent([_GOOD]))
+    shown, hidden = gen._visible_messages(model.scenarios["a_first"])
+    assert [m.name for m in shown] == ["submit"]
+    assert hidden == 2
+    sec = {"id": "scenarios", "title": "시나리오", "output": "scenarios/index.md", "kind": "per-scenario",
+           "lead": "고르세요.", "facts": {"scenarios": "*"}, "next": {"title": "다음", "link": "camera-model.md"}}
+    gen._per_scenario(sec, None)
+    page = (tmp_cfg.sdd_dir / "scenarios" / "a_first.md").read_text(encoding="utf-8")
+    assert "`RequestManager::submit()`" in page
+    assert "trace()" not in page and "_d()" not in page
+    assert "표시에서 뺀 호출이 2 개 있습니다." in page
+    # 사실은 그대로 남는다.
+    assert len(model.scenarios["a_first"].messages) == 3

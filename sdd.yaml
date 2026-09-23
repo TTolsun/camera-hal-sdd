@@ -22,6 +22,11 @@ output:
   sdd_dir: sdd                    # 생성된 SDD Markdown (MkDocs docs_dir)
   diagrams_dir: sdd/diagrams      # clang-uml 이 만든 Mermaid 다이어그램 복사본
 
+facts:
+  # 패키지를 선언 파일 경로의 앞 몇 개 디렉터리로 묶을지 정한다 (clang-uml 을 쓰지 않는 추출 경로에 적용).
+  # 소스가 src/ 와 include/ 아래로만 나뉘면 1 은 패키지가 두세 개로 뭉쳐서 개요 표가 쓸모없어진다.
+  package_depth: 1
+
 tools:
   clang_uml: clang-uml
 

@@ -86,6 +86,39 @@ def _render(body: str, rel: str, known: set[str], model: KnowledgeModel | None,
     return rendered, md.toc, md.toc_tokens
 
 
+def _place_scenarios(entries: list[tuple[str, str, str]], order: list[str]) -> list[tuple[str, str, str]]:
+    """시나리오 하위 페이지를 목차 바로 뒤에, 설정한 호출 차례대로 놓는다.
+
+    파일 이름 순으로 두면 메뉴가 호출이 일어나는 차례와 어긋나고, 목차 페이지와 떨어져 붙는다.
+    설정에 없는 시나리오는 이름 순으로 뒤에 놓아 메뉴에서 빠지지 않게 한다.
+    """
+    subs = [e for e in entries if e[2].startswith("scenarios/") and e[2] != "scenarios/index.md"]
+    if not subs:
+        return entries
+    rank = {f"scenarios/{sid}.md": i for i, sid in enumerate(order)}
+    subs.sort(key=lambda e: (rank.get(e[2], len(rank)), e[2]))
+    rest = [e for e in entries if e not in subs]
+    index_at = next((i for i, e in enumerate(rest) if e[2] == "scenarios/index.md"), None)
+    if index_at is None:
+        return rest + subs
+    return rest[:index_at + 1] + subs + rest[index_at + 1:]
+
+
+def _grouped(entries: list[tuple[str, str, str]], preferred: list[str] | None = None) -> list[tuple[str, str, str]]:
+    """그룹 단위로 묶는다. `site.nav_groups` 에 적은 그룹이 그 순서대로 앞에 온다.
+
+    같은 그룹의 항목이 목록에서 떨어져 있으면 그룹 제목이 두 번 나온다. 그룹 안의 순서는 섹션
+    순서를 그대로 두고 그룹 단위로만 모아서, 문서를 읽는 차례와 메뉴의 분류를 따로 정할 수 있게 한다.
+    설정에 없는 그룹은 처음 나온 순서대로 뒤에 붙인다.
+    """
+    present = {group for group, _, _ in entries}
+    order: list[str] = [g for g in (preferred or []) if g in present]
+    for group, _, _ in entries:
+        if group not in order:
+            order.append(group)
+    return [e for group in order for e in entries if e[0] == group]
+
+
 def export_site(cfg: Config, out: Path | None = None, mermaid_src: str | None = None) -> Path:
     from .site_build import build_site
     return build_site(cfg, out or cfg.build_dir / "site", _render_site, mermaid_src)
@@ -105,7 +138,11 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
                if section.get("kind") != "manual" and not (cfg.sdd_dir / rel).is_file()]
     if missing:
         raise RuntimeError("Configured pages are missing; run generate first: " + ", ".join(missing))
-    entries = [("설계 문서", s.get("title", rel), rel) for rel, s in sections.items()
+    # 그룹은 sections.yaml 의 group 이 정한다. 없으면 한 그룹으로 묶는다.
+    default_group = str(settings.get("nav_group") or "설계 문서")
+    scenario_group = next((str(s.get("group") or default_group) for s in sections.values()
+                           if s.get("kind") == "per-scenario"), default_group)
+    entries = [(str(s.get("group") or default_group), s.get("title", rel), rel) for rel, s in sections.items()
                if (cfg.sdd_dir / rel).is_file()]
     # Include configured MkDocs pages and scenario pages without losing section ordering.
     for group, name, rel in _nav_entries(cfg.root / "mkdocs.yml", cfg.sdd_dir):
@@ -115,9 +152,12 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
                 continue
         rel = _path(rel)
         if (cfg.sdd_dir / rel).is_file() and rel not in {e[2] for e in entries}:
-            entries.append((group or "설계 문서", name, rel))
+            inherited = scenario_group if rel.startswith("scenarios/") else default_group
+            entries.append((group or inherited, name, rel))
     if not entries:
         raise RuntimeError("No generated Markdown pages found")
+    entries = _grouped(entries, [str(g) for g in (settings.get("nav_groups") or [])])
+    entries = _place_scenarios(entries, [sc["id"] for sc in cfg.scenarios()])
     texts = {rel: (cfg.sdd_dir / rel).read_text(encoding="utf-8") for _, _, rel in entries}
     if "index.md" not in texts:
         intro = settings.get("intro")
@@ -190,10 +230,12 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
         last_group = None
         for nav_group, nav_title, nav_rel in entries:
             if nav_group != last_group:
-                nav.append(f'<p class="nav-group">{html.escape(nav_group)}</p>')
+                if nav_group:
+                    nav.append(f'<p class="nav-group">{html.escape(nav_group)}</p>')
                 last_group = nav_group
             active = ' aria-current="page"' if nav_rel == rel else ""
-            nav.append(f'<a href="{_href(_html_path(nav_rel), current)}"{active}>{html.escape(nav_title)}</a>')
+            cls = ' class="nav-sub"' if nav_rel.startswith("scenarios/") and nav_rel != "scenarios/index.md" else ""
+            nav.append(f'<a{cls} href="{_href(_html_path(nav_rel), current)}"{active}>{html.escape(nav_title)}</a>')
         previous_next = []
         for offset, label in [(-1, "이전"), (1, "다음")]:
             other = index + offset

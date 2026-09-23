@@ -88,6 +88,8 @@ class Scenario:
     messages: list[Message] = field(default_factory=list)
     mermaid: str = ""              # clang-uml 이 만든 Mermaid 본문
     unresolved: int = 0            # 정적으로 끊긴 호출 수 (virtual / function pointer)
+    # 인자로 넘어간 메서드 수. 대상은 알지만 실행 시점과 스레드는 큐·신호 구현이 정한다.
+    deferred: int = 0
 
 
 @dataclass
@@ -202,6 +204,7 @@ class KnowledgeModel:
                 messages=[Message(x["src"], x["dst"], x["name"], loc(x.get("loc")), x.get("note", ""))
                           for x in s.get("messages", [])],
                 mermaid=s.get("mermaid", ""), unresolved=int(s.get("unresolved", 0)),
+                deferred=int(s.get("deferred", 0)),
             )
         m.includes = [IncludeEdge(**e) for e in d.get("includes", [])]
         return m

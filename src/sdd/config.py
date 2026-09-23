@@ -45,6 +45,9 @@ class Config:
     agent: AgentConfig
     require_citations: bool
     max_retries: int
+    # 패키지 = 선언 파일 경로의 앞 N 개 디렉터리. 1 이면 최상위 디렉터리 하나로 묶는다.
+    # 소스가 src/ 와 include/ 아래로만 나뉘는 프로젝트는 2 이상이어야 패키지 표가 의미를 가진다.
+    package_depth: int = 1
     raw: dict[str, Any] = field(default_factory=dict)
     # 자산 위치. 기본은 root 아래 config/, prompts/, templates/, style/. sdd.yaml 의 paths: 로 바꿀 수 있다
     # (examples/ 처럼 저장소의 자산을 다른 위치에서 재사용할 때).
@@ -165,6 +168,7 @@ def load(path: Path | None = None) -> Config:
         agent=agent,
         require_citations=bool(review.get("require_citations", True)),
         max_retries=int(review.get("max_retries", 1)),
+        package_depth=max(1, int((raw.get("facts", {}) or {}).get("package_depth", 1))),
         raw=raw,
         paths={k: rel(str(v), ".") for k, v in (raw.get("paths", {}) or {}).items()},
     )

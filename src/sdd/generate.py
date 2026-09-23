@@ -21,8 +21,8 @@ from typing import Any
 
 from .budget import Block, fit
 from .config import Config
-from .diagrams import diagram_block, section_diagram
-from .facts.model import ClassInfo, KnowledgeModel, Scenario
+from .diagrams import diagram_block, section_diagram, sequence_diagram
+from .facts.model import ClassInfo, KnowledgeModel
 from .impact import ImpactReport
 from .matching import matches_symbol
 from .llm import Agent
@@ -35,6 +35,10 @@ _FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
 _YAML_FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
 _MAX_STEPS = 30
 _MAX_READING = 6
+# 시퀀스 그림에 그리는 메시지 수. 넘으면 자르고 자른 개수를 문서에 적는다.
+_MAX_SEQUENCE = 40
+# 개요의 의존 표에 싣는 방향 수. 넘으면 관계가 많은 순으로 자르고 자른 개수를 문서에 적는다.
+_MAX_DEPS = 20
 
 
 def slugify(text: str) -> str:
@@ -79,6 +83,10 @@ class Generator:
         # routes 표의 링크 글자: 페이지 링크는 섹션 제목, 앵커 링크는 본문의 ## 제목 원문을 쓴다.
         self.page_titles = {sec.get("output", f"{sec['id']}.md"): sec["title"] for sec in cfg.sections()}
         self.page_titles.update({f"{sid}.md": sc.title for sid, sc in model.scenarios.items()})
+        # scenarios.yaml 의 순서와 표시 규칙(hide)을 쓴다. 목차와 페이지 연결을 설정한 순서대로 두어야
+        # 읽는 사람이 호출이 일어나는 차례대로 따라갈 수 있다.
+        self.scenario_order = [sc["id"] for sc in cfg.scenarios()]
+        self.scenario_cfg = {sc["id"]: sc for sc in cfg.scenarios()}
 
     # ---- 진입점 ------------------------------------------------------------
 
@@ -117,7 +125,7 @@ class Generator:
             t = self._package_table(facts["packages"])
             tables.append("## 패키지별 역할\n\n" + t)
             blocks.append(Block("packages", "### 패키지별 역할\n" + t, 0))
-            deps = self._package_deps_table()
+            deps = self._package_deps_table(facts["packages"])
             if deps:
                 tables.append("## 패키지 사이의 의존\n\n" + deps)
                 blocks.append(Block("package-deps", "### 패키지 사이의 의존\n" + deps, 1))
@@ -238,21 +246,41 @@ class Generator:
 
     def _per_scenario(self, sec: dict[str, Any], impact: ImpactReport | None) -> list[Path]:
         out: list[Path] = []
-        ordered = sorted(self.model.scenarios.items())
-        rows = ["| 시나리오 | 진입점 | 단계 수 | 미해결 호출 |", "|---|---|---|---|"]
+        ordered = self._ordered_scenarios()
+        rows = ["| 시나리오 | 진입점 | 단계 수 | 표시에서 뺀 호출 | 예약된 호출 | 미해결 호출 |",
+                "|---|---|---|---|---|---|"]
         routes: list[tuple[str, str]] = []
+        shown_by_id: dict[str, tuple[list[Any], int]] = {}
         for sid, sc in ordered:
-            rows.append(f"| [{sc.title}]({sid}.md) | `{sc.entry}` | {len(sc.messages)} | {sc.unresolved} |")  # index.md 와 같은 디렉터리
+            shown, hidden = self._visible_messages(sc)
+            shown_by_id[sid] = (shown, hidden)
+            # index.md 와 같은 디렉터리에 있으므로 파일 이름만 쓴다.
+            rows.append(f"| [{sc.title}]({sid}.md) | `{sc.entry}` | {len(shown)} | {hidden} "
+                        f"| {sc.deferred} | {sc.unresolved} |")
             routes.append((f"{sc.title} 흐름을 추적합니다.", f"scenarios/{sid}.md"))
 
         for idx, (sid, sc) in enumerate(ordered):
             if impact and sid not in impact.scenarios:
                 continue
-            steps = _steps(sc)
+            shown, hidden = shown_by_id[sid]
+            steps = _steps(shown, hidden)
             blocks = [Block("steps", f"### 시나리오 {sc.title}\n- 진입점: {sc.entry}\n{steps}", 0)]
             text, omitted, verdict = self._ask(f"scenario_{sid}", sec, sc.title, blocks, "")
-            mermaid = f"```mermaid\n{sc.mermaid.strip()}\n```" if sc.mermaid else ""
+            # 그림도 표시에서 뺀 목록으로 다시 그린다. facts 의 mermaid 는 전체 메시지로 만든 것이어서
+            # 호출 순서 목록과 내용이 어긋난다.
+            drawn = shown[:_MAX_SEQUENCE]
+            diagram = sequence_diagram(sc.participants[0] if sc.participants else sc.entry, drawn)
+            mermaid = f"```mermaid\n{diagram}\n```"
+            if len(shown) > _MAX_SEQUENCE:
+                mermaid += (f"\n\n그림에는 앞의 {_MAX_SEQUENCE} 개 호출만 그렸습니다. 나머지 {len(shown) - _MAX_SEQUENCE} 개는"
+                            " 아래 호출 순서와 `facts.json` 에서 확인하세요.")
             body_parts = [p for p in (mermaid, f"## 호출 순서\n\n{steps}", f"## 이 흐름에서 확인할 것\n\n{text}") if p]
+            if sc.deferred:
+                body_parts.append(
+                    f"확인 필요: 메서드를 인자로 넘겨 예약한 호출이 {sc.deferred} 개 있습니다. 위에서 `예약된 호출, 실행 순서는"
+                    " 정적으로 확인 불가` 로 표시한 단계가 그 자리입니다. 대상 메서드는 확인했지만, 실제 실행 시점과 스레드는"
+                    " 큐나 신호 구현이 정하므로 이 번호 목록은 그 지점 이후의 순서를 보장하지 않습니다. 이후 흐름은 예약을 받는"
+                    " 쪽의 구현에서 직접 확인해야 합니다.")
             if sc.unresolved:
                 body_parts.append(f"확인 필요: 가상 함수나 함수 포인터 때문에 정적으로 끊긴 호출이 {sc.unresolved} 개 있습니다. "
                                   "끊긴 지점 이후는 코드를 직접 따라가야 합니다.")
@@ -267,12 +295,24 @@ class Generator:
                 extra={"section": sec["id"], "entry": sc.entry}, page_path=path)
             out.append(self._write(path, page))
 
+
         index_body = "## 시나리오 목록\n\n" + "\n".join(rows)
+        # 시나리오가 하나도 없는 목차를 통과로 기록하면, 진입점 설정이 어긋난 상태가 문서에 드러나지 않는다.
+        index_verdict = Verdict(ok=bool(ordered))
+        if not ordered:
+            missing = int((self.model.meta.get("callgraph") or {}).get("missing_entries", 0))
+            reason = (f"설정한 진입 함수 {missing} 개를 추출에서 찾지 못했습니다."
+                      if missing else "scenarios.yaml 에 진입 함수가 없거나 추출이 시나리오를 만들지 않았습니다.")
+            index_verdict.notes.append(reason)
+            index_body += ("\n\n확인 필요: 추적한 시나리오가 없습니다. " + reason
+                           + " `sdd extract` 로그의 진입점 경고를 확인하고, `config/scenarios.yaml` 의"
+                             " 시그니처를 대상 커밋의 정의와 대조해야 합니다.")
         index_path = self.cfg.sdd_dir / sec.get("output", "scenarios/index.md")
         index_page = self._render(
             title=sec["title"], lead=sec.get("lead", ""), body=index_body, routes=routes,
-            evidence=self._evidence_lines([], [], Verdict(ok=True), []),
-            next_link=_next_of(sec), status="ok", omitted=[], extra={"section": sec["id"]}, page_path=index_path)
+            evidence=self._evidence_lines([], [], index_verdict, []),
+            next_link=_next_of(sec), status=_status(index_verdict), omitted=[],
+            extra={"section": sec["id"]}, page_path=index_path)
         out.append(self._write(index_path, index_page))
         return out
 
@@ -360,25 +400,39 @@ class Generator:
     def _package_table(self, pats: list[str]) -> str:
         rows = ["| 패키지 | 클래스 수 | 대표 클래스 |", "|---|---|---|"]
         for name in sorted(self.model.packages):
-            if not any(fnmatch.fnmatch(name, p) for p in pats):
+            if not _pkg_selected(name, pats):
                 continue
             p = self.model.packages[name]
-            reps = ", ".join(f"`{c}`" for c in p.classes[:5]) or "(없음)"
+            # 익명 구조체의 libclang 이름에는 파싱한 기계의 절대 경로가 들어간다. 대표 클래스에서 뺀다.
+            named = [c for c in p.classes if not _is_anonymous(c)]
+            reps = ", ".join(f"`{c}`" for c in named[:5]) or "(이름 있는 클래스 없음)"
             rows.append(f"| `{name}` | {len(p.classes)} | {reps} |")
         return "\n".join(rows)
 
-    def _package_deps_table(self) -> str:
+    def _package_deps_table(self, pats: list[str]) -> str:
+        # 패키지 표에 없는 이름은 의존 표에서도 뺀다. 두 표의 기준이 다르면 읽는 사람이
+        # 표에 없는 패키지를 근거 없이 추측하게 된다.
         pkg_of = {name: c.package for name, c in self.model.classes.items() if c.package}
         edges: Counter[tuple[str, str, str]] = Counter()
         for r in self.model.relations:
             s, t = pkg_of.get(r.source), pkg_of.get(r.target)
-            if s and t and s != t:
+            if s and t and s != t and _pkg_selected(s, pats) and _pkg_selected(t, pats):
                 edges[(s, t, r.type)] += 1
         if not edges:
             return ""
-        rows = ["| 방향 | 관계 종류 | 관계 수 |", "|---|---|---|"]
-        for (s, t, typ), n in sorted(edges.items(), key=lambda kv: (-kv[1], kv[0])):
-            rows.append(f"| `{s}` → `{t}` | {typ} | {n} |")
+        # 같은 방향의 상속과 필드 참조를 한 줄로 합친다. 종류마다 줄을 나누면 개요에서
+        # 읽어야 할 줄이 두 배가 되고, 어느 방향이 굵은지가 보이지 않는다.
+        pairs: dict[tuple[str, str], dict[str, int]] = {}
+        for (src, dst, typ), n in edges.items():
+            pairs.setdefault((src, dst), {"inheritance": 0, "association": 0})[typ] = n
+        ordered = sorted(pairs.items(), key=lambda kv: (-sum(kv[1].values()), kv[0]))
+        rows = ["| 방향 | 상속 | 필드 참조 |", "|---|---|---|"]
+        for (src, dst), counts in ordered[:_MAX_DEPS]:
+            rows.append(f"| `{src}` → `{dst}` | {counts['inheritance']} | {counts['association']} |")
+        if len(ordered) > _MAX_DEPS:
+            rows.append("")
+            rows.append(f"관계가 많은 순으로 {_MAX_DEPS} 개만 실었습니다. 나머지 {len(ordered) - _MAX_DEPS} 개 방향은"
+                        " `facts.json` 의 `relations` 에 있습니다.")
         return "\n".join(rows)
 
     def _entrypoint_table(self, pats: list[str]) -> str:
@@ -391,12 +445,31 @@ class Generator:
             rows.append(f"| `{name}()` | {f'`{loc.cite()}`' if loc else '위치 없음'} | {fn.brief or '확인 필요'} |")
         return "\n".join(rows) if len(rows) > 2 else ""
 
+    def _ordered_scenarios(self) -> list[tuple[str, Any]]:
+        """scenarios.yaml 에 적은 순서대로 돌려준다.
+
+        호출이 일어나는 차례를 설정이 정한다. 설정에 없는 시나리오가 facts 에 있으면 이름 순으로
+        뒤에 붙여서 목차와 페이지 연결에서 빠지지 않게 한다.
+        """
+        known = [(sid, self.model.scenarios[sid]) for sid in self.scenario_order if sid in self.model.scenarios]
+        rest = sorted((sid, sc) for sid, sc in self.model.scenarios.items() if sid not in self.scenario_order)
+        return known + rest
+
+    def _visible_messages(self, sc: Any) -> tuple[list[Any], int]:
+        """문서에 쓸 메시지와 표시에서 뺀 개수를 돌려준다."""
+        hide = (self.scenario_cfg.get(sc.id) or {}).get("hide") or {}
+        if not hide:
+            return list(sc.messages), 0
+        shown = [m for m in sc.messages if not _hidden_message(m, hide)]
+        return shown, len(sc.messages) - len(shown)
+
     def _reading_order(self, scenario_id: str) -> str:
         sc = self.model.scenarios.get(scenario_id)
         if not sc or not sc.messages:
             return ""
+        shown, hidden = self._visible_messages(sc)
         seen: list[tuple[str, str]] = []
-        for m in sc.messages:
+        for m in shown:
             if not m.loc:
                 continue
             key = (m.loc.file, m.name)
@@ -404,10 +477,15 @@ class Generator:
                 seen.append(key)
             if len(seen) >= _MAX_READING:
                 break
+        if not seen:
+            return ""
         lines = [f"{i}. `{f}` 에서 `{fn}()` 부분을 읽습니다." for i, (f, fn) in enumerate(seen, start=1)]
         lines.append(f"\n이 순서는 `{sc.title}` 시나리오의 호출 경로에서 만들었습니다. "
                      f"자세한 흐름은 시나리오 문서 [{sc.title}](scenarios/{sc.id}.md) 에서 확인하세요.")
+        if hidden:
+            lines.append(f"\n로깅과 접근자 호출 {hidden} 개는 `hide` 규칙에 따라 이 순서에서 뺐습니다.")
         return "\n".join(lines)
+
 
     def _entity_files(self, sec: dict[str, Any]) -> set[str]:
         """표에 file:line 이 없는 절(개요)에서도 근거 파일을 남기기 위해, 표에 오른 엔티티의 파일을 모은다."""
@@ -569,6 +647,31 @@ def _routes_from_headings(body: str) -> list[tuple[str, str]] | None:
     return [(f"{h} 절을 확인합니다.", f"#{slugify(h)}") for h in heads]
 
 
+def _hidden_message(m: Any, hide: dict[str, Any]) -> bool:
+    """이 호출을 표시에서 뺄지 판정한다. 사실에서 지우는 것이 아니라 문서에 쓰지 않는 것이다.
+
+    로깅 매크로와 d-pointer 접근자는 호출 그래프에서 수가 많아서, 걸러내지 않으면 실제 흐름이
+    묻힌다. 어떤 이름을 뺄지는 프로젝트마다 다르므로 scenarios.yaml 에서 정한다.
+    """
+    owners = hide.get("owners") or []
+    names = hide.get("names") or []
+    return (any(fnmatch.fnmatch(m.dst, p) for p in owners)
+            or any(fnmatch.fnmatch(m.src, p) for p in owners)
+            or any(fnmatch.fnmatch(m.name, p) for p in names))
+
+
+def _pkg_selected(name: str, pats: list[str]) -> bool:
+    """패키지 이름 glob. 경로 구분자를 특별히 다루지 않으므로 `src/*` 는 `src/ipa/ipu3` 에도 걸린다."""
+    return any(fnmatch.fnmatch(name, p) for p in pats)
+
+
+def _is_anonymous(class_name: str) -> bool:
+    """libclang 이 익명 구조체·공용체에 붙이는 이름인지 판정한다.
+
+    이 이름에는 파싱한 기계의 절대 경로가 들어 있어서(예: `(unnamed struct at /home/.../ipa_context.h:33:2)`)
+    문서에 그대로 실으면 빌드 환경 경로가 노출되고 읽는 사람에게도 의미가 없다.
+    """
+    return "(unnamed " in class_name or "(anonymous " in class_name
 
 
 def _match_class(c: ClassInfo, sec: dict[str, Any]) -> bool:
@@ -609,12 +712,12 @@ def _class_fact(c: ClassInfo) -> str:
     return "\n".join(lines)
 
 
-def _steps(sc: Scenario) -> str:
+def _steps(messages: list[Any], hidden: int = 0) -> str:
     """연속 중복을 합친 번호 목록. 각 단계에 file:line 을 붙인다."""
     lines: list[str] = []
     prev: tuple[str, str, str] | None = None
     truncated = False
-    for m in sc.messages:
+    for m in messages:
         key = (m.src, m.dst, m.name)
         if key == prev:
             continue
@@ -625,9 +728,14 @@ def _steps(sc: Scenario) -> str:
         cite = f" `{m.loc.cite()}`" if m.loc else ""
         note = f" ({m.note})" if m.note else ""
         lines.append(f"{len(lines) + 1}. `{m.src}` 가 `{m.dst}::{m.name}()` 를 호출합니다.{note}{cite}")
+    if not lines:
+        return "호출 순서를 얻지 못했습니다. 확인 필요: 진입 함수 시그니처가 clang-uml 설정과 맞는지 확인하세요."
     if truncated:
-        lines.append("\n(이후 단계는 생략했습니다. 전체 흐름은 위 다이어그램을 보세요.)")
-    return "\n".join(lines) if lines else "호출 순서를 얻지 못했습니다. 확인 필요: 진입 함수 시그니처가 clang-uml 설정과 맞는지 확인하세요."
+        lines.append("\n(이후 단계는 생략했습니다. 전체 흐름은 `facts.json` 의 `scenarios` 에 있습니다.)")
+    if hidden:
+        lines.append(f"\n표시에서 뺀 호출이 {hidden} 개 있습니다. `config/scenarios.yaml` 의 `hide` 규칙에 걸린"
+                     " 로깅과 접근자 호출이며, `facts.json` 에는 그대로 남아 있습니다.")
+    return "\n".join(lines)
 
 
 def _subsection(existing: str, heading: str) -> str:

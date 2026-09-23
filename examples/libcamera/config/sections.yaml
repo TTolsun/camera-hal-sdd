@@ -1,5 +1,70 @@
 sections:
+- id: overview
+  group: For Developers
+  title: 시스템 개요
+  output: overview.md
+  kind: prose
+  lead: 수정할 코드가 어느 패키지에 있는지 아래 표에서 먼저 찾으세요.
+  reader: libcamera 코드를 처음 읽는 개발자
+  answers:
+  - 소스는 어떤 패키지로 나뉘고, 각 패키지에는 어떤 클래스가 들어 있는가?
+  - 패키지 사이의 상속과 필드 참조는 어느 방향으로 향하는가?
+  - 애플리케이션이 요청을 제출하면 호출은 어떤 순서로 코드를 지나가는가?
+  facts:
+    # 패키지 이름은 sdd.yaml 의 facts.package_depth 로 결정된다 (이 예제는 3).
+    # include/linux 의 커널 UAPI 정의와 build/ 아래 생성 헤더는 표에서 뺀다.
+    packages:
+    - src/*
+    - include/libcamera*
+    # 인용할 file:line 을 주려고 사실로만 넘긴다. 클래스 표는 camera-model.md 가 담당한다.
+    classes:
+    - libcamera::CameraManager
+    - libcamera::Camera
+    - libcamera::Request
+    - libcamera::PipelineHandler
+    - libcamera::IPAManager
+    class_table: false
+    # 클래스 변경으로는 개요를 다시 만들지 않는다. watch 만 본다.
+    impact_classes: []
+    reading_order: queue_request
+  routes:
+  - q: 수정할 패키지를 찾습니다.
+    to: '#패키지별-역할'
+  - q: 패키지 사이의 의존 방향을 확인합니다.
+    to: '#패키지-사이의-의존'
+  - q: 요청이 처리되는 순서를 처음 봅니다.
+    to: '#코드를-처음-읽는-순서'
+  - q: 클래스 단위 책임을 확인합니다.
+    to: camera-model.md
+  watch:
+  - src/**
+  - include/libcamera/**
+  - '**/meson.build'
+  - meson.options
+  - meson_options.txt
+  next:
+    title: 핵심 시나리오 시퀀스
+    link: scenarios/index.md
+- id: scenarios
+  group: For Developers
+  title: 핵심 시나리오 시퀀스
+  output: scenarios/index.md
+  kind: per-scenario
+  lead: 추적하려는 동작을 표에서 고르세요. 각 시나리오는 진입 함수부터 호출 순서를 번호로 보여 줍니다.
+  reader: 특정 동작의 호출 경로를 추적하는 개발자
+  answers:
+  - 호출은 어떤 순서로 어느 컴포넌트를 지나가는가?
+  - 어디서 분기하고, 어디서 정적 추적이 끊기는가?
+  facts:
+    scenarios: '*'
+  watch:
+  - src/libcamera/**
+  - src/ipa/**
+  next:
+    title: 카메라와 요청 모델
+    link: camera-model.md
 - id: camera-model
+  group: For Developers
   title: 카메라와 요청 모델
   output: camera-model.md
   kind: prose
@@ -194,6 +259,7 @@ sections:
       - queue
       - stop
 - id: pipeline-handler
+  group: For Vendors
   title: Pipeline Handler
   output: pipeline-handler.md
   kind: prose
@@ -218,6 +284,7 @@ sections:
     link: ipa.md
   semantic_review: true
 - id: ipa
+  group: For Vendors
   title: IPA 관리와 구현 진입점
   output: ipa.md
   kind: prose
@@ -247,6 +314,7 @@ sections:
     link: ipu3-lsc.md
   semantic_review: true
 - id: ipu3-lsc
+  group: For Vendors
   title: IPU3 LSC와 상태 연결
   output: ipu3-lsc.md
   kind: prose
@@ -274,10 +342,11 @@ sections:
   - src/ipa/ipu3/**
   - src/ipa/libipa/lsc*
   next:
-    title: 카메라와 요청 모델
-    link: camera-model.md
+    title: IPU3 LSC의 설정과 프레임 처리
+    link: ipu3-lsc-flow.md
   narration: facts
 - id: ipu3-lsc-flow
+  group: For Vendors
   title: IPU3 LSC의 설정과 프레임 처리
   output: ipu3-lsc-flow.md
   kind: prose
@@ -299,8 +368,8 @@ sections:
   - src/ipa/ipu3/ipa_context.*
   - src/ipa/libipa/lsc*
   next:
-    title: IPU3 LSC와 상태 연결
-    link: ipu3-lsc.md
+    title: 시스템 개요
+    link: overview.md
   design_topics:
   - id: integration
     title: 빌드와 상태 연결

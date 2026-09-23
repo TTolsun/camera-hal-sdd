@@ -1,3 +1,43 @@
-# 대상 SHA의 정의와 파서가 추출한 시그니처를 대조한 뒤 진입점을 추가한다.
-# 빈 목록은 호출 흐름을 검증했다는 뜻이 아니다.
-scenarios: []
+# libclang 대체 경로(tools.clang_uml: none)가 이 진입점에서 호출 순서를 추적한다.
+# 아래 시그니처는 커밋 279d355ef8f7a4f98bb0a3004c0f788387814506 의 정의와 대조했고, 근거 위치를
+# 항목마다 적었다. 소스 커밋을 올린 뒤에는 다시 대조해야 한다. 맞지 않으면 extract 로그가
+# "진입 함수를 찾지 못했습니다" 와 missing_entries 개수를 보고한다. 그 경고를 무시하면 안 된다.
+# 목록에 있다는 것은 정적 호출 순서를 추출했다는 뜻이고, 실행으로 검증했다는 뜻은 아니다.
+
+# glob 은 clang-uml 경로에서만 쓰인다. 이 예제는 tools.clang_uml: none 이므로
+# compile DB 의 모든 translation unit 을 그래프에 넣고, glob 은 지정해도 무시된다.
+defaults:
+  depth: 4
+  # 표시에서 뺄 호출. 사실에서 지우지 않고 문서의 호출 순서와 그림에만 적용하며,
+  # 뺀 개수는 문서에 적는다. libcamera 의 LOG() 매크로와 Extensible 의 d-pointer 접근자는
+  # 호출 그래프의 대부분을 차지해서, 걸러내지 않으면 실제 흐름이 묻힌다.
+  hide:
+    owners: ["log", "LogMessage", "LogMessageAbortGuard"]
+    names: ["_d", "_log", "isLogSeverityEnabled", "stream", "basename"]
+
+scenarios:
+  - id: manager_start
+    title: 카메라 탐색 (CameraManager::start)
+    from: "CameraManager::start()"
+    # 정의: src/libcamera/camera_manager.cpp:338
+
+  - id: configure
+    title: 스트림 구성 (Camera::configure)
+    from: "Camera::configure(CameraConfiguration *)"
+    # 정의: src/libcamera/camera.cpp:1191
+
+  - id: camera_start
+    title: 캡처 시작 (Camera::start)
+    from: "Camera::start(const ControlList *)"
+    # 정의: src/libcamera/camera.cpp:1400
+
+  - id: queue_request
+    title: 요청 제출 (Camera::queueRequest)
+    from: "Camera::queueRequest(Request *)"
+    # 정의: src/libcamera/camera.cpp:1330
+    depth: 5
+
+  - id: complete_request
+    title: 요청 완료 통지 (PipelineHandler::completeRequest)
+    from: "PipelineHandler::completeRequest(Request *)"
+    # 정의: src/libcamera/pipeline_handler.cpp:584
