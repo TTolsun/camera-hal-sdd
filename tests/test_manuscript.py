@@ -74,3 +74,27 @@ def test_describe_makes_one_line_notes():
     assert len(notes) == 1
     assert notes[0].startswith("[종결어미] 1행 ")
     assert "…" in notes[0] and "\n" not in notes[0]
+
+
+def test_코드_표기_없는_클래스_이름을_잡는다():
+    from sdd.manuscript import lint
+    names = {"libcamera::IPAManager", "IPAManager", "IPAProxy"}
+    problems = lint("IPAManager 는 모듈을 만듭니다 `src/a.cpp:10`.", names)
+    assert [p.rule for p in problems] == ["코드 표기 없는 클래스 이름"]
+    assert "`IPAManager`" in problems[0].detail
+    # 코드 표기 안에 있으면 잡지 않는다.
+    assert lint("`IPAManager` 는 모듈을 만듭니다 `src/a.cpp:10`.", names) == []
+    # 사실에 없는 이름은 이 규칙의 대상이 아니다.
+    assert lint("SomeOtherThing 은 관계가 없습니다 `src/a.cpp:10`.", names) == []
+
+
+def test_이름_목록이_없으면_코드_표기를_강제하지_않는다():
+    from sdd.manuscript import lint
+    assert lint("IPAManager 는 모듈을 만듭니다 `src/a.cpp:10`.") == []
+
+
+def test_표와_제목에는_코드_표기_규칙을_적용하지_않는다():
+    from sdd.manuscript import lint
+    names = {"IPAManager"}
+    assert lint("| IPAManager | src/a.cpp:10 |", names) == []
+    assert lint("## IPAManager", names) == []

@@ -92,7 +92,17 @@ def unwrap(text: str) -> str:
     return (m.group(1) if m else t).strip()
 
 
-def lint(body: str) -> list[Finding]:
+_CODE_SPAN = re.compile(r"`[^`]*`")
+_IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]*(?:::[A-Za-z0-9_]+)*")
+
+
+def bare_symbols(line: str, names: set[str]) -> list[str]:
+    """코드 표기 밖에 나온 클래스 이름. 표기 안에 있는 이름은 건드리지 않는다."""
+    outside = _CODE_SPAN.sub(" ", line)
+    return [t for t in _IDENTIFIER.findall(outside) if t in names]
+
+
+def lint(body: str, names: set[str] | None = None) -> list[Finding]:
     findings: list[Finding] = []
     fenced = False
     fence_line, fence_text = 0, ""
@@ -111,6 +121,13 @@ def lint(body: str) -> list[Finding]:
                 continue
             if r.test(line):
                 findings.append(Finding(r.rule, r.detail, i + 1, line.strip()))
+        if prose and names:
+            bare = bare_symbols(line, names)
+            if bare:
+                findings.append(Finding(
+                    "코드 표기 없는 클래스 이름",
+                    "클래스 이름은 본문에서도 코드 표기로 감쌉니다: " + ", ".join(f"`{b}`" for b in dict.fromkeys(bare)),
+                    i + 1, line.strip()))
     if fenced:
         # 닫히지 않은 펜스는 이후 줄 전체를 검사 불능으로 만들므로 그 자체를 위반으로 잡는다.
         findings.append(Finding("닫히지 않은 코드 펜스",
