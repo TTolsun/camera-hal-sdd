@@ -7,11 +7,38 @@ from .facts.model import KnowledgeModel
 from .validate import extract_citations
 
 
+def known_names(model: KnowledgeModel) -> set[str]:
+    """설명에서 가리킬 수 있는 이름. 선언된 기반 클래스는 자체 ClassInfo 가 없을 수 있다."""
+    names = set(model.classes) | {b for c in model.classes.values() for b in c.bases}
+    return names | {n for r in model.relations for n in (r.source, r.target)}
+
+
+def normalize_symbols(text: str, model: KnowledgeModel) -> str:
+    """앞 네임스페이스를 뺀 한정 이름을 facts 의 전체 이름으로 되돌린다.
+
+    소형 모델은 `libcamera::ipa::ipu3::IPAIPU3` 를 `ipa::ipu3::IPAIPU3` 로 줄여 쓴다. 뒤쪽이
+    유일하게 일치하는 이름이 하나뿐일 때만 바꾸므로 가리키는 대상이 달라지지 않는다. 후보가
+    여러 개이거나 없으면 손대지 않고, 검사에서 확인할 문제로 남긴다. 인용을 고치는
+    `normalize_citations` 와 같은 원칙이다.
+    """
+    names = known_names(model)
+    if not names:
+        return text
+
+    def fix(m: re.Match[str]) -> str:
+        name = m.group(1)
+        if "::" not in name or name in names:
+            return m.group(0)
+        candidates = [n for n in names if n.endswith("::" + name)]
+        return f"`{candidates[0]}`" if len(candidates) == 1 else m.group(0)
+
+    return re.sub(r"`([\w:]+)`", fix, text)
+
+
 def review(text: str, model: KnowledgeModel, supplied: set[str]) -> list[str]:
     findings = []
     # A declared base may be a typedef/alias without its own ClassInfo.
-    known = set(model.classes) | {b for c in model.classes.values() for b in c.bases}
-    known |= {n for r in model.relations for n in (r.source, r.target)}
+    known = known_names(model)
     def resolve(name: str) -> str | None:
         candidates = [n for n in known if n == name or ('::' not in name and n.rsplit('::', 1)[-1] == name)]
         return candidates[0] if len(candidates) == 1 else None

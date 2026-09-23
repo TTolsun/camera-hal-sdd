@@ -364,3 +364,27 @@ def test_페이지_머리말을_본문에_되풀이하면_지운다(tmp_cfg, sam
     text, _, _ = gen._ask("t", {"id": "t", "title": "테스트", "lead": lead}, "테스트",
                           [Block("core", "class CameraDevice `device/CameraDevice.h:40`", 0)], existing="")
     assert lead not in text and body in text
+
+
+def test_줄여_쓴_한정_이름을_사실의_이름으로_되돌린다(tmp_cfg, sample_model):
+    """소형 모델은 앞 네임스페이스를 뺀다. 인용을 고치는 것과 같은 원칙으로 이름도 되돌린다."""
+    from sdd.facts.model import ClassInfo, Location
+
+    sample_model.classes["hal::ipa::ipu3::IPAIPU3"] = ClassInfo(
+        name="hal::ipa::ipu3::IPAIPU3", loc=Location("device/CameraDevice.h", 40))
+    tmp_cfg.agent.kind = "fake"
+    said = ("`ipa::ipu3::IPAIPU3` 는 요청을 처리합니다 `device/CameraDevice.h:40`.")
+    gen = Generator(tmp_cfg, sample_model, _FakeAgent([said]))
+    text, _, _ = gen._ask("t", {"id": "t", "title": "테스트"}, "테스트",
+                          [Block("core", "class `device/CameraDevice.h:40`", 0)], existing="")
+    assert "`hal::ipa::ipu3::IPAIPU3`" in text
+
+
+def test_뒤가_같은_이름이_둘이면_손대지_않는다(tmp_cfg, sample_model):
+    from sdd.semantic import normalize_symbols
+    from sdd.facts.model import ClassInfo
+
+    for name in ("a::pkg::Same", "b::pkg::Same"):
+        sample_model.classes[name] = ClassInfo(name=name)
+    said = "`pkg::Same` 을 확인하세요."
+    assert normalize_symbols(said, sample_model) == said

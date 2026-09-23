@@ -29,7 +29,7 @@ from .llm import Agent
 from .manuscript import describe, lint, unwrap
 from .validate import Verdict, check, extract_citations, normalize_citations, strip_echo, strip_headings
 from .evidence import contract_text, fingerprint, requires_fingerprint, topic_blocks
-from .semantic import relation_facts, structural_text, review as semantic_review
+from .semantic import normalize_symbols, relation_facts, structural_text, review as semantic_review
 
 _FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
 _YAML_FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
@@ -389,7 +389,8 @@ class Generator:
         text = ""
         for attempt in range(self.cfg.max_retries + 1):
             raw = self.agent.chat(self.system, user, tag=f"{tag}_{attempt}")
-            text = strip_headings(strip_echo(normalize_citations(unwrap(raw), self.allowed), echo_source))
+            text = normalize_symbols(normalize_citations(unwrap(raw), self.allowed), self.model)
+            text = strip_headings(strip_echo(text, echo_source))
             verdict = check(text, self.allowed, require=self.cfg.require_citations)
             cite_failed = not verdict.ok
             # 인용과 별개로 문장 형태 위반(종결어미, 대화체, 프롬프트 누설)도 반려 사유다.
