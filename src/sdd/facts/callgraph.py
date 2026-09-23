@@ -134,7 +134,8 @@ def _classify_call(node: cindex.Cursor, ref: cindex.Cursor | None, loc: Location
         return Call("", _callee_expr_name(node) or "callable", fd_owner, loc, kind="callable")
     if ref.kind not in (_METHOD_KINDS | _FUNCTION_KINDS) or not _under(ref, root):
         return None
-    if ref.kind == cindex.CursorKind.CONSTRUCTOR and ref.semantic_parent is not None             and not ref.semantic_parent.spelling:
+    if (ref.kind == cindex.CursorKind.CONSTRUCTOR and ref.semantic_parent is not None
+            and not ref.semantic_parent.spelling):
         return None
     is_virtual = (ref.kind == cindex.CursorKind.CXX_METHOD and ref.is_virtual_method()
                   and not _is_qualified_call(node))
