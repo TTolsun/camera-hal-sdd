@@ -8,6 +8,8 @@
 #   per-package  - 패키지(디렉터리)마다 클래스 표 + LLM 서술. 소형 모델 입력 상한 대응.
 #   per-scenario - config/scenarios.yaml 의 시나리오마다 문서 하나. 시퀀스 다이어그램과 호출 순서는 도구가, 설명만 LLM 이.
 #   table        - LLM 없이 사실만으로 표를 만든다.
+#   index        - 문서 목록 한 장. 다른 섹션의 title·reader·lead 를 그대로 옮긴다. LLM 을 부르지 않는다.
+#                  mkdocs 와 사이트가 첫 페이지로 찾는 index.md 를 파이프라인이 만들게 하는 종류다.
 #   manual       - 사람이 쓰는 문서. 파이프라인이 덮어쓰지 않는다. frontmatter 의 evidence_files 가 바뀌면 영향 보고에 올린다.
 #
 # watch: 소스 루트 기준 glob. 이 경로가 변경되면 섹션을 재생성 대상으로 잡는다.
@@ -20,6 +22,14 @@
 # next: 페이지 끝에 연결할 문서 하나.
 
 sections:
+  - id: index
+    title: 문서 안내
+    output: index.md
+    kind: index
+    lead: 아래 표에서 지금 필요한 문서를 고르세요.
+    reader: 이 문서 묶음을 처음 여는 개발자
+    next: {title: 시스템 개요, link: overview.md}
+
   - id: overview
     title: 시스템 개요
     output: overview.md
@@ -84,6 +94,7 @@ sections:
     title: Feature flag 매트릭스
     output: feature-flags.md
     kind: table
+    reader: 빌드 구성에 따라 동작이 갈리는 지점을 찾는 개발자
     lead: 바꾸려는 동작이 어떤 -D 플래그 아래에 있는지 표에서 확인하세요. 이 표는 NDK-build 구성 기준입니다.
     facts:
       defines: "*"

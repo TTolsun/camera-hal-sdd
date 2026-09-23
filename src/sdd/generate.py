@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .budget import Block, fit
-from .config import Config
+from .config import Config, section_output
 from .diagrams import diagram_block, section_diagram, sequence_diagram
 from .facts.model import ClassInfo, KnowledgeModel
 from .impact import ImpactReport
@@ -108,6 +108,8 @@ class Generator:
                 written += self._per_scenario(sec, impact)
             elif kind == "table":
                 written.append(self._flags_table(sec))
+            elif kind == "index":
+                written.append(self._index_page(sec))
             else:
                 raise ValueError(f"{sec['id']}: 알 수 없는 kind {kind}")
         return written
@@ -315,6 +317,27 @@ class Generator:
             extra={"section": sec["id"]}, page_path=index_path)
         out.append(self._write(index_path, index_page))
         return out
+
+    def _index_page(self, sec: dict[str, Any]) -> Path:
+        """문서 목록 한 장. 설정의 문서 정의를 그대로 옮기므로 LLM 을 부르지 않는다.
+
+        mkdocs 와 사이트 모두 첫 페이지로 `index.md` 를 찾는다. 파이프라인이 만들지 않으면
+        섹션을 추가하거나 지울 때마다 사람이 따로 맞춰야 하고, 맞추지 않으면 첫 페이지가 비어 버린다.
+        """
+        rows = ["| 문서 | 읽는 사람 | 먼저 할 일 |", "|---|---|---|"]
+        for other in self.cfg.sections():
+            if other["id"] == sec["id"]:
+                continue
+            rel = section_output(other)
+            # 사람이 쓰는 문서는 파이프라인이 만들지 않는다. 아직 없는 파일로 링크를 걸지 않는다.
+            if other.get("kind") == "manual" and not (self.cfg.sdd_dir / rel).is_file():
+                continue
+            rows.append(f"| [{other['title']}]({rel}) | {other.get('reader', '확인 필요')} "
+                        f"| {other.get('lead', '확인 필요')} |")
+        body = ("## 문서 목록\n\n"
+                "이 표는 문서 정의(`sections.yaml`)를 그대로 옮긴 것입니다. LLM 을 거치지 않았습니다.\n\n"
+                + "\n".join(rows))
+        return self._write_section(sec, body, [], [body], Verdict(ok=True), [])
 
     def _flags_table(self, sec: dict[str, Any]) -> Path:
         lines = ["## 플래그 표", "",

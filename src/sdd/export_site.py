@@ -12,7 +12,7 @@ from urllib.parse import quote, urlsplit
 
 import markdown
 
-from .config import Config
+from .config import Config, section_output
 from .diagrams import section_diagram, diagram_block
 from .export_html import _mermaid_fence, _nav_entries, _split, _title_of_text
 from .facts.model import KnowledgeModel
@@ -132,8 +132,7 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
     out = (out or cfg.build_dir / "site").resolve()
     if out == cfg.sdd_dir.resolve() or out in cfg.sdd_dir.resolve().parents:
         raise RuntimeError("Site output must be separate from the Markdown source directory")
-    sections = {_path(s.get("output") or ("scenarios/index.md" if s.get("kind") == "per-scenario"
-                                         else f"{s['id']}.md")): s for s in cfg.sections()}
+    sections = {_path(section_output(s)): s for s in cfg.sections()}
     missing = [rel for rel, section in sections.items()
                if section.get("kind") != "manual" and not (cfg.sdd_dir / rel).is_file()]
     if missing:
