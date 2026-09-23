@@ -374,6 +374,10 @@ class Generator:
         if existing:
             # 기존 본문은 사실 블록으로도 들어가므로 렌더링된 프롬프트에서 한 번 더 뺀다.
             echo_source = echo_source.replace(existing, "")
+        # 페이지 머리말(lead)은 뼈대가 굵게 한 번 찍는다. 모델이 그 문장을 본문 첫 줄로 다시 쓰면
+        # 같은 문장이 두 번 보이므로 메아리로 본다.
+        if sec.get("lead"):
+            echo_source += "\n" + str(sec["lead"])
         if self.cfg.agent.kind == "dry-run":
             # 프롬프트만 기록한다. 검증할 출력이 없으므로 사람이 볼 문서로 표시한다.
             text = self.agent.chat(self.system, user, tag=tag)
