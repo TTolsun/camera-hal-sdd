@@ -353,3 +353,14 @@ def test_사실_목록을_되풀이한_줄은_계속_지운다(tmp_cfg, sample_m
     text, _, _ = gen._ask("t", {"id": "t", "title": "테스트"}, "테스트",
                           [Block("core", fact_line, 0)], existing="")
     assert fact_line not in text and good in text
+
+
+def test_페이지_머리말을_본문에_되풀이하면_지운다(tmp_cfg, sample_model):
+    """머리말은 뼈대가 굵게 한 번 찍는다. 본문 첫 줄에 같은 문장이 또 나오면 중복으로 보인다."""
+    lead = "수정할 코드가 어느 패키지에 있는지 아래 표에서 먼저 찾으세요."
+    body = "`CameraDevice` 는 요청을 큐에 넣습니다 `device/CameraDevice.cpp:300`."
+    tmp_cfg.agent.kind = "fake"
+    gen = Generator(tmp_cfg, sample_model, _FakeAgent([lead + "\n\n" + body]))
+    text, _, _ = gen._ask("t", {"id": "t", "title": "테스트", "lead": lead}, "테스트",
+                          [Block("core", "class CameraDevice `device/CameraDevice.h:40`", 0)], existing="")
+    assert lead not in text and body in text
