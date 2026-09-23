@@ -22,7 +22,7 @@ from typing import Any
 from .budget import Block, fit
 from .config import Config
 from .diagrams import diagram_block, section_diagram, sequence_diagram
-from .facts.model import ClassInfo, KnowledgeModel, Scenario
+from .facts.model import ClassInfo, KnowledgeModel
 from .impact import ImpactReport
 from .matching import matches_symbol
 from .llm import Agent
@@ -639,7 +639,6 @@ def _routes_from_headings(body: str) -> list[tuple[str, str]] | None:
     return [(f"{h} 절을 확인합니다.", f"#{slugify(h)}") for h in heads]
 
 
-
 def _hidden_message(m: Any, hide: dict[str, Any]) -> bool:
     """이 호출을 표시에서 뺄지 판정한다. 사실에서 지우는 것이 아니라 문서에 쓰지 않는 것이다.
 
@@ -721,13 +720,13 @@ def _steps(messages: list[Any], hidden: int = 0) -> str:
         cite = f" `{m.loc.cite()}`" if m.loc else ""
         note = f" ({m.note})" if m.note else ""
         lines.append(f"{len(lines) + 1}. `{m.src}` 가 `{m.dst}::{m.name}()` 를 호출합니다.{note}{cite}")
+    if not lines:
+        return "호출 순서를 얻지 못했습니다. 확인 필요: 진입 함수 시그니처가 clang-uml 설정과 맞는지 확인하세요."
     if truncated:
-        lines.append("\n(이후 단계는 생략했습니다. 전체 흐름은 위 다이어그램을 보세요.)")
+        lines.append("\n(이후 단계는 생략했습니다. 전체 흐름은 `facts.json` 의 `scenarios` 에 있습니다.)")
     if hidden:
         lines.append(f"\n표시에서 뺀 호출이 {hidden} 개 있습니다. `config/scenarios.yaml` 의 `hide` 규칙에 걸린"
                      " 로깅과 접근자 호출이며, `facts.json` 에는 그대로 남아 있습니다.")
-    if not lines:
-        return "호출 순서를 얻지 못했습니다. 확인 필요: 진입 함수 시그니처가 clang-uml 설정과 맞는지 확인하세요."
     return "\n".join(lines)
 
 
