@@ -364,8 +364,16 @@ class Generator:
         facts, omitted = fit(blocks, self.cfg.agent.max_input_chars, reserved=reserved)
         existing_txt = existing if existing and "existing" not in omitted else "(없음)"
         answers = "\n".join(f"- {a}" for a in (sec.get("answers") or ["이 절의 독자가 알아야 하는 구조와 관계는 무엇인가?"]))
-        user = self.section_tpl.format(title=title, reader=sec.get("reader", "이 HAL 을 수정하는 개발자"),
-                                       answers=answers, facts=facts, existing=existing_txt)
+        fields = {"title": title, "reader": sec.get("reader", "이 HAL 을 수정하는 개발자"),
+                  "answers": answers, "facts": facts}
+        user = self.section_tpl.format(**fields, existing=existing_txt)
+        # 메아리 판정에서 기존 본문은 뺀다. 프롬프트가 "구조를 유지하고 바뀐 부분만 고치라" 고
+        # 지시하므로 모델이 기존 문장을 그대로 다시 쓰는 것이 정상이다. 그 문장까지 메아리로
+        # 지우면 증분 생성에서 본문이 통째로 사라지고 빈 페이지가 남는다.
+        echo_source = self.system + "\n" + self.section_tpl.format(**fields, existing="(없음)")
+        if existing:
+            # 기존 본문은 사실 블록으로도 들어가므로 렌더링된 프롬프트에서 한 번 더 뺀다.
+            echo_source = echo_source.replace(existing, "")
         if self.cfg.agent.kind == "dry-run":
             # 프롬프트만 기록한다. 검증할 출력이 없으므로 사람이 볼 문서로 표시한다.
             text = self.agent.chat(self.system, user, tag=tag)
@@ -377,7 +385,7 @@ class Generator:
         text = ""
         for attempt in range(self.cfg.max_retries + 1):
             raw = self.agent.chat(self.system, user, tag=f"{tag}_{attempt}")
-            text = strip_headings(strip_echo(normalize_citations(unwrap(raw), self.allowed), self.system + "\n" + user))
+            text = strip_headings(strip_echo(normalize_citations(unwrap(raw), self.allowed), echo_source))
             verdict = check(text, self.allowed, require=self.cfg.require_citations)
             cite_failed = not verdict.ok
             # 인용과 별개로 문장 형태 위반(종결어미, 대화체, 프롬프트 누설)도 반려 사유다.
@@ -394,13 +402,17 @@ class Generator:
                     verdict.notes.extend(findings)
             if verdict.ok:
                 break
-            user = user + "\n\n## 이전 출력의 문제\n" + "\n".join(f"- {n}" for n in verdict.notes) + \
-                "\n위 문제를 고쳐서 다시 씁니다."
+            retry_note = ("\n\n## 이전 출력의 문제\n" + "\n".join(f"- {n}" for n in verdict.notes)
+                          + "\n위 문제를 고쳐서 다시 씁니다.")
+            user += retry_note
+            echo_source += retry_note
             if cite_failed:
                 # 인용 검증 실패에만 인용 복사 지시를 붙인다. 린트만 실패했을 때는 문장 교정에 집중시킨다.
                 usable = list(dict.fromkeys(extract_citations(facts)))[:12]
-                user += " 사실 블록에 적힌 `파일:줄` 을 디렉터리까지 그대로 복사해서 인용합니다." + \
-                    ("\n인용할 수 있는 위치 예: " + ", ".join(f"`{c}`" for c in usable) if usable else "")
+                cite_note = (" 사실 블록에 적힌 `파일:줄` 을 디렉터리까지 그대로 복사해서 인용합니다."
+                             + ("\n인용할 수 있는 위치 예: " + ", ".join(f"`{c}`" for c in usable) if usable else ""))
+                user += cite_note
+                echo_source += cite_note
         self._record_review(tag, text, verdict, omitted)
         return text, omitted, verdict
 

@@ -327,3 +327,29 @@ def test_문서_안내는_섹션_정의로_만든다(tmp_cfg, sample_model):
     assert "decisions.md" not in page                            # 아직 없는 수동 문서로 링크하지 않는다
     assert "status: ok" in page
     assert agent.users == []                                     # LLM 을 부르지 않는다
+
+
+def test_기존_본문을_그대로_다시_써도_메아리로_지우지_않는다(tmp_cfg, sample_model):
+    """프롬프트는 기존 본문의 구조를 유지하라고 지시한다. 그대로 돌아온 문장을 지우면 본문이 사라진다."""
+    kept = ("`CameraDevice` 는 카메라마다 하나씩 만들어집니다 `device/CameraDevice.h:40`. "
+            "스트림 구성은 `configureStreams()` 가 담당합니다 `device/CameraDevice.cpp:120`.")
+    tmp_cfg.agent.kind = "fake"
+    agent = _FakeAgent([kept])
+    gen = Generator(tmp_cfg, sample_model, agent)
+    sec = {"id": "t", "title": "테스트"}
+    blocks = [Block("core", "class CameraDevice `device/CameraDevice.h:40`", 0)]
+    text, _, verdict = gen._ask("t", sec, "테스트", blocks, existing=kept)
+    assert kept in agent.users[0]          # 기존 본문은 프롬프트에 들어간다
+    assert text.strip() == kept            # 그대로 돌아와도 본문이 남는다
+    assert verdict.ok
+
+
+def test_사실_목록을_되풀이한_줄은_계속_지운다(tmp_cfg, sample_model):
+    tmp_cfg.agent.kind = "fake"
+    fact_line = "class CameraDevice `device/CameraDevice.h:40`"
+    good = "`CameraDevice` 는 요청을 큐에 넣습니다 `device/CameraDevice.cpp:300`."
+    agent = _FakeAgent([fact_line + "\n" + good])
+    gen = Generator(tmp_cfg, sample_model, agent)
+    text, _, _ = gen._ask("t", {"id": "t", "title": "테스트"}, "테스트",
+                          [Block("core", fact_line, 0)], existing="")
+    assert fact_line not in text and good in text
