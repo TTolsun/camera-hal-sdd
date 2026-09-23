@@ -104,6 +104,16 @@ def _place_scenarios(entries: list[tuple[str, str, str]], order: list[str]) -> l
     return rest[:index_at + 1] + subs + rest[index_at + 1:]
 
 
+def _is_child(rel: str) -> bool:
+    """목차 페이지에 딸린 하위 문서인지 판정한다."""
+    return "/" in rel and not rel.endswith("/index.md")
+
+
+def _branch_of(rel: str) -> str:
+    """하위 문서를 묶는 가지 이름. 목차 페이지와 그 하위 문서가 같은 값을 가진다."""
+    return rel.rsplit("/", 1)[0] if "/" in rel else ""
+
+
 def _grouped(entries: list[tuple[str, str, str]], preferred: list[str] | None = None) -> list[tuple[str, str, str]]:
     """그룹 단위로 묶는다. `site.nav_groups` 에 적은 그룹이 그 순서대로 앞에 온다.
 
@@ -227,14 +237,29 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
         page_title, meta, content, toc = rendered_pages[rel]
         nav = []
         last_group = None
+        branch_open = False
         for nav_group, nav_title, nav_rel in entries:
+            child = _is_child(nav_rel)
+            if not child and branch_open:
+                nav.append("</details>")
+                branch_open = False
             if nav_group != last_group:
                 if nav_group:
                     nav.append(f'<p class="nav-group">{html.escape(nav_group)}</p>')
                 last_group = nav_group
             active = ' aria-current="page"' if nav_rel == rel else ""
-            cls = ' class="nav-sub"' if nav_rel.startswith("scenarios/") and nav_rel != "scenarios/index.md" else ""
-            nav.append(f'<a{cls} href="{_href(_html_path(nav_rel), current)}"{active}>{html.escape(nav_title)}</a>')
+            link = (f'<a{" class=" + chr(34) + "nav-sub" + chr(34) if child else ""}'
+                    f' href="{_href(_html_path(nav_rel), current)}"{active}>{html.escape(nav_title)}</a>')
+            if child and not branch_open:
+                # 하위 문서는 접었다 펼 수 있게 묶는다. 읽고 있는 가지만 펴 둔다.
+                count = sum(1 for _, _, r in entries if _branch_of(r) == _branch_of(nav_rel) and _is_child(r))
+                opened = " open" if _branch_of(rel) == _branch_of(nav_rel) else ""
+                nav.append(f'<details class="nav-branch"{opened}>'
+                           f'<summary>하위 문서 {count} 편</summary>')
+                branch_open = True
+            nav.append(link)
+        if branch_open:
+            nav.append("</details>")
         previous_next = []
         for offset, label in [(-1, "이전"), (1, "다음")]:
             other = index + offset
