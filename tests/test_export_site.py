@@ -320,3 +320,19 @@ def test_메뉴_그룹_순서는_설정이_정한다(tmp_cfg, sample_model):
     assert items.index('[For Vendors]') < items.index('[For Developers]')
     # 설정에 없는 그룹은 뒤에 붙지 않고 원래 자리를 지킨다 (시작하기는 맨 앞에 끼워 넣는다).
     assert items[0] == '[시작하기]'
+
+
+def test_하위_문서는_접었다_펼_수_있다(tmp_cfg, sample_model):
+    prepare_groups(tmp_cfg, sample_model)
+    out = export_site(tmp_cfg)
+    parent = (out / 'scenarios/index.html').read_text(encoding='utf-8')
+    other = (out / 'device.html').read_text(encoding='utf-8')
+    child = (out / 'scenarios/open.html').read_text(encoding='utf-8')
+    assert '<summary>하위 문서 2 편</summary>' in other
+    # 읽고 있는 가지만 펴 둔다. 다른 문서에서는 접어서 목록을 짧게 유지한다.
+    assert '<details class="nav-branch" open>' in parent
+    assert '<details class="nav-branch" open>' in child
+    assert '<details class="nav-branch">' in other
+    # 접기는 하위 문서만 감싼다. 같은 그룹의 다른 문서가 안으로 들어가면 안 된다.
+    branch = other.split('<details class="nav-branch">')[1].split('</details>')[0]
+    assert 'scenarios/open.html' in branch and 'pipe.html' not in branch
