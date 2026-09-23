@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .budget import Block, fit
-from .config import Config
+from .config import Config, section_output
 from .diagrams import diagram_block, section_diagram, sequence_diagram
 from .facts.model import ClassInfo, KnowledgeModel
 from .impact import ImpactReport
@@ -33,7 +33,6 @@ from .semantic import relation_facts, structural_text, review as semantic_review
 
 _FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
 _YAML_FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
-_NL = chr(10)
 _MAX_STEPS = 30
 _MAX_READING = 6
 # 시퀀스 그림에 그리는 메시지 수. 넘으면 자르고 자른 개수를 문서에 적는다.
@@ -329,15 +328,15 @@ class Generator:
         for other in self.cfg.sections():
             if other["id"] == sec["id"]:
                 continue
-            rel = _output_of(other)
+            rel = section_output(other)
             # 사람이 쓰는 문서는 파이프라인이 만들지 않는다. 아직 없는 파일로 링크를 걸지 않는다.
             if other.get("kind") == "manual" and not (self.cfg.sdd_dir / rel).is_file():
                 continue
             rows.append(f"| [{other['title']}]({rel}) | {other.get('reader', '확인 필요')} "
                         f"| {other.get('lead', '확인 필요')} |")
-        body = ("## 문서 목록" + _NL * 2
-                + "이 표는 문서 정의(`sections.yaml`)를 그대로 옮긴 것입니다. LLM 을 거치지 않았습니다."
-                + _NL * 2 + _NL.join(rows))
+        body = ("## 문서 목록\n\n"
+                "이 표는 문서 정의(`sections.yaml`)를 그대로 옮긴 것입니다. LLM 을 거치지 않았습니다.\n\n"
+                + "\n".join(rows))
         return self._write_section(sec, body, [], [body], Verdict(ok=True), [])
 
     def _flags_table(self, sec: dict[str, Any]) -> Path:
@@ -650,12 +649,6 @@ class Generator:
 
 def _status(v: Verdict) -> str:
     return "ok" if v.ok else "needs-review"
-
-
-def _output_of(sec: dict[str, Any]) -> str:
-    """섹션이 만드는 페이지의 sdd 루트 기준 경로. export_site 의 규칙과 같아야 한다."""
-    return str(sec.get("output") or ("scenarios/index.md" if sec.get("kind") == "per-scenario"
-                                     else f"{sec['id']}.md"))
 
 
 def _next_of(sec: dict[str, Any]) -> tuple[str, str]:

@@ -106,6 +106,16 @@ def _load_yaml(path: Path) -> dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def section_output(section: dict[str, Any]) -> str:
+    """섹션이 만드는 페이지의 sdd 루트 기준 경로.
+
+    생성과 사이트 구성이 같은 규칙을 써야 문서 목록의 링크와 메뉴 항목이 어긋나지 않는다.
+    """
+    kind = section.get("kind", "prose")
+    return str(section.get("output") or ("scenarios/index.md" if kind == "per-scenario"
+                                         else f"{section['id']}.md"))
+
+
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     out = dict(base)
     for k, v in override.items():
