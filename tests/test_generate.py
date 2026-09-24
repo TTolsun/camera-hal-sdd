@@ -433,3 +433,24 @@ def test_고른_섹션만_만들_때는_범위_밖_자리를_만들지_않는다
     Generator(tmp_cfg, sample_model, _FakeAgent([_GOOD])).run(section_ids=["overview"])
     assert (tmp_cfg.sdd_dir / "overview.md").exists()
     assert not (tmp_cfg.sdd_dir / "constraints.md").exists()
+
+
+def test_지정한_설정_파일을_그대로_읽는다(tmp_path):
+    """이름을 버리고 sdd.yaml 을 읽으면 지정하지 않은 설정이 조용히 돈다."""
+    import pytest
+    from sdd.config import load
+
+    (tmp_path / "sdd.yaml").write_text("source:\n  root: ./default\n", encoding="utf-8")
+    (tmp_path / "sdd.a.yaml").write_text("source:\n  root: ./side-a\n", encoding="utf-8")
+    (tmp_path / "sdd.a.local.yaml").write_text("agent:\n  model: side-a-model\n", encoding="utf-8")
+
+    assert load(tmp_path / "sdd.yaml").source_root.name == "default"
+    chosen = load(tmp_path / "sdd.a.yaml")
+    assert chosen.source_root.name == "side-a"
+    # 로컬 덮어쓰기는 같은 이름 옆에서 찾는다.
+    assert chosen.agent.model == 'side-a-model'
+    # 기본 설정의 로컬 덮어쓰기가 다른 설정에 새지 않는다.
+    assert load(tmp_path / "sdd.yaml").agent.model != "side-a-model"
+
+    with pytest.raises(FileNotFoundError):
+        load(tmp_path / "sdd.없음.yaml")

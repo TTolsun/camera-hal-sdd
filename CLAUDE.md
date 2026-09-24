@@ -30,7 +30,7 @@ uv run sdd verify-site             # 산출물 해시와 내부 링크 검사
 uv run sdd export-html             # 단일 HTML 생성
 ```
 
-다른 프로젝트 설정은 `uv run sdd --config examples/libcamera/sdd.yaml <명령>`처럼 지정합니다. LLM 없이 흐름만 확인하려면 `sdd.local.yaml`(Git 제외)에 `agent: {kind: dry-run}`을 둡니다. 기본 `sdd.yaml`은 사내 HAL용 예시 경로이므로 실제 실행 전에 수정이 필요합니다.
+다른 프로젝트 설정은 `uv run sdd --config examples/libcamera/sdd.yaml <명령>`처럼 지정합니다. `--config`는 지정한 파일을 그대로 읽으므로 한 디렉터리에 설정을 여럿 둘 수 있고, 로컬 덮어쓰기는 같은 이름의 `.local.yaml`에서 찾습니다. LLM 없이 흐름만 확인하려면 `sdd.local.yaml`(Git 제외)에 `agent: {kind: dry-run}`을 둡니다. 기본 `sdd.yaml`은 사내 HAL용 예시 경로이므로 실제 실행 전에 수정이 필요합니다.
 
 ## 아키텍처
 
