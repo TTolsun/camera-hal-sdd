@@ -41,3 +41,14 @@ agent:
 review:
   require_citations: true
   max_retries: 2
+
+site:
+  enabled: true
+  title: mini-hal 설계 문서 (예제)
+  # 왼쪽 메뉴의 그룹 순서. sections.yaml 의 group 값과 맞춘다.
+  nav_groups: ["시작하기", "For Users", "For Developers"]
+
+diagrams:
+  enabled: true
+  max_nodes: 16
+  direction: LR

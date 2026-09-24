@@ -97,11 +97,15 @@ class Generator:
         written: list[Path] = []
         for sec in self.cfg.sections():
             kind = sec.get("kind", "prose")
-            if kind == "manual":
-                continue
             if section_ids and sec["id"] not in section_ids:
                 continue
             if impact and sec["id"] not in impact.sections:
+                continue
+            if kind == "manual":
+                # 고른 섹션만 만들 때는 그 섹션의 자리만 만든다. 범위 밖 파일을 건드리지 않는다.
+                stub = self._manual_stub(sec)
+                if stub is not None:
+                    written.append(stub)
                 continue
             if kind == "prose":
                 written.append(self._prose(sec))
@@ -320,6 +324,22 @@ class Generator:
             extra={"section": sec["id"]}, page_path=index_path)
         out.append(self._write(index_path, index_page))
         return out
+
+    def _manual_stub(self, sec: dict[str, Any]) -> Path | None:
+        """사람이 쓰는 문서가 아직 없으면 빈 자리를 만든다. 이미 있으면 건드리지 않는다.
+
+        설정에 있는 문서로 연결한 링크는 파일이 없으면 깨진다. 없는 채로 두면 사이트 빌드가
+        멈추고, 링크를 지우면 써야 할 문서가 설정에서만 남아 잊힌다. 그래서 무엇을 써야 하는지
+        적은 자리를 만들어 두고, 사람이 채우면 그 뒤로는 덮어쓰지 않는다.
+        """
+        path = self.cfg.sdd_dir / section_output(sec)
+        if path.exists():
+            return None
+        body = ("## 아직 작성되지 않았습니다" + "\n\n"
+                "이 문서는 파이프라인이 만들지 않습니다. 코드에서 확인할 수 없는 설계 결정과 기기 관찰을"
+                " 사람이 적는 자리입니다." + "\n\n"
+                "이 파일을 직접 편집하세요. 내용을 채우면 이후 생성에서 덮어쓰지 않습니다.")
+        return self._write_section(sec, body, [], [], Verdict(ok=False, notes=["사람이 작성해야 하는 문서입니다."]), [])
 
     def _index_page(self, sec: dict[str, Any]) -> Path:
         """문서 목록 한 장. 설정의 문서 정의를 그대로 옮기므로 LLM 을 부르지 않는다.

@@ -10,7 +10,7 @@
 #   table        - LLM 없이 사실만으로 표를 만든다.
 #   index        - 문서 목록 한 장. 다른 섹션의 title·reader·lead 를 그대로 옮긴다. LLM 을 부르지 않는다.
 #                  mkdocs 와 사이트가 첫 페이지로 찾는 index.md 를 파이프라인이 만들게 하는 종류다.
-#   manual       - 사람이 쓰는 문서. 파이프라인이 덮어쓰지 않는다. frontmatter 의 evidence_files 가 바뀌면 영향 보고에 올린다.
+#   manual       - 사람이 쓰는 문서. 파일이 없으면 무엇을 써야 하는지 적은 자리를 만들고, 내용이 있으면 덮어쓰지 않는다. frontmatter 의 evidence_files 가 바뀌면 영향 보고에 올린다.
 #
 # watch: 소스 루트 기준 glob. 이 경로가 변경되면 섹션을 재생성 대상으로 잡는다.
 # facts.classes / facts.packages / facts.functions: fnmatch 패턴.
@@ -23,6 +23,7 @@
 
 sections:
   - id: index
+    group: 시작하기
     title: 문서 안내
     output: index.md
     kind: index
@@ -31,6 +32,7 @@ sections:
     next: {title: 시스템 개요, link: overview.md}
 
   - id: overview
+    group: For Users
     title: 시스템 개요
     output: overview.md
     kind: prose
@@ -51,7 +53,7 @@ sections:
       - q: 수정할 패키지를 찾습니다.
         to: "#패키지별-역할"
       - q: 프레임워크에서 HAL 로 들어오는 진입점을 찾습니다.
-        to: "#hal-진입점"
+        to: "#관련-자유-함수"      # 생성기가 facts.functions 로 만드는 절 제목
       - q: 코드를 처음 읽습니다.
         to: "#코드를-처음-읽는-순서"
       - q: 클래스 단위 책임을 확인합니다.
@@ -60,6 +62,7 @@ sections:
     next: {title: 컴포넌트 구조와 책임, link: components.md}
 
   - id: components
+    group: For Developers
     title: 컴포넌트 구조와 책임
     output: components.md
     kind: per-package
@@ -77,6 +80,7 @@ sections:
     next: {title: 핵심 시나리오 시퀀스, link: scenarios/index.md}
 
   - id: scenarios
+    group: For Users
     title: 핵심 시나리오 시퀀스
     output: scenarios/index.md
     kind: per-scenario
@@ -91,6 +95,7 @@ sections:
     next: {title: Feature flag 매트릭스, link: feature-flags.md}
 
   - id: feature-flags
+    group: For Developers
     title: Feature flag 매트릭스
     output: feature-flags.md
     kind: table
@@ -102,6 +107,7 @@ sections:
     next: {title: 스레드와 큐 모델, link: threading.md}
 
   - id: threading
+    group: For Developers
     title: 스레드와 큐 모델
     output: threading.md
     kind: prose
@@ -121,12 +127,14 @@ sections:
   # 코드로 확인한 동작(위 섹션)과 설계 결정·기기 관찰(아래 문서)을 구분한다 (style/README.md 5항).
 
   - id: constraints
+    group: For Developers
     title: 변경 시 지켜야 할 제약
     output: constraints.md
     kind: manual
     next: {title: 설계 결정 기록, link: decisions.md}
 
   - id: decisions
+    group: For Developers
     title: 설계 결정 기록
     output: decisions.md
     kind: manual
