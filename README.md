@@ -43,6 +43,7 @@ agent:
 ```
 
 - 작은 HAL 예제: [examples/mini-hal](examples/mini-hal/)과 [기존 결과 스냅샷](examples/mini-hal/expected-output/)
+- 사내 Camera HAL: [적용 절차와 준비 항목](docs/inhouse-adoption.md) (사내 환경에서 실행되지 않은 절차입니다)
 - 공개 libcamera: [환경 준비와 실행](docs/libcamera-home-lab.md), [실제 WSL 실행 기록](docs/libcamera-wsl-run.md)
 - 게시 결과: [검토용 사이트](https://ttolsun.github.io/libcamera-sdd/), [카메라 모델 문서의 충분성 평가](docs/camera-model-review.md)
 
