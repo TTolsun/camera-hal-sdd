@@ -388,3 +388,20 @@ def test_뒤가_같은_이름이_둘이면_손대지_않는다(tmp_cfg, sample_m
         sample_model.classes[name] = ClassInfo(name=name)
     said = "`pkg::Same` 을 확인하세요."
     assert normalize_symbols(said, sample_model) == said
+
+
+def test_확인_필요_문단에는_인용을_요구하지_않는다(sample_model):
+    """확인되지 않았다고만 적은 문단에는 인용할 위치가 없다."""
+    from sdd.semantic import review
+    supplied = {"device/CameraDevice.h:40"}
+    text = ("`CameraDevice` 는 요청을 큐에 넣습니다 `device/CameraDevice.h:40`.\n\n"
+            "콜백이 실행되는 스레드는 정적 분석으로 확인할 수 없습니다. "
+            "종료 순서는 코드를 실행해서 확인해야 합니다.")
+    assert "설명 문단에 근거 인용이 없습니다." not in review(text, sample_model, supplied)
+
+
+def test_사실을_주장하는_문단에는_계속_인용을_요구한다(sample_model):
+    from sdd.semantic import review
+    text = ("`CameraDevice` 는 요청을 큐에 넣습니다 `device/CameraDevice.h:40`.\n\n"
+            "버퍼는 파이프라인이 해제합니다. 종료 순서는 확인해야 합니다.")
+    assert "설명 문단에 근거 인용이 없습니다." in review(text, sample_model, {"device/CameraDevice.h:40"})

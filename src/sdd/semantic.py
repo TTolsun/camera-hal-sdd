@@ -7,6 +7,22 @@ from .facts.model import KnowledgeModel
 from .validate import extract_citations
 
 
+# 확인되지 않았다고 말하는 문장. 이런 문장은 인용할 근거 자체가 없다.
+_UNCERTAIN = re.compile(r"확인이 필요|확인해야|확인할 수 없|확인되지 않|확인하지 못|명시되지 않|"
+                        r"근거가 부족|근거가 없|보장하지 않|알 수 없|추출되지 않|존재하지 않")
+
+
+def only_uncertainty(paragraph: str) -> bool:
+    """문단의 모든 문장이 "확인되지 않았다" 는 서술인지 판정한다.
+
+    무엇이 확인되지 않았는지 적은 문단에는 인용할 위치가 없다. 그래도 인용을 요구하면 모델이
+    관계 없는 위치를 붙이게 되고, 그 인용은 근거가 아니라 검사를 통과하기 위한 장식이 된다.
+    사실을 하나라도 주장하는 문단은 그대로 인용을 요구한다.
+    """
+    sentences = [x for x in re.split(r"(?<=[.!?])\s+|\n", paragraph) if x.strip()]
+    return bool(sentences) and all(_UNCERTAIN.search(x) for x in sentences)
+
+
 def known_names(model: KnowledgeModel) -> set[str]:
     """설명에서 가리킬 수 있는 이름. 선언된 기반 클래스는 자체 ClassInfo 가 없을 수 있다."""
     names = set(model.classes) | {b for c in model.classes.values() for b in c.bases}
@@ -47,7 +63,8 @@ def review(text: str, model: KnowledgeModel, supplied: set[str]) -> list[str]:
             continue
         citations = set(extract_citations(paragraph))
         if not citations:
-            findings.append("설명 문단에 근거 인용이 없습니다.")
+            if not only_uncertainty(paragraph):
+                findings.append("설명 문단에 근거 인용이 없습니다.")
         elif citations - supplied:
             findings.append("현재 설명 입력에 제공되지 않은 위치를 인용했습니다: " + ", ".join(sorted(citations - supplied)))
     for sentence in re.split(r"(?<=[.!?])\s+|\n", text):
