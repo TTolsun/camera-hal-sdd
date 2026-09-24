@@ -4,6 +4,16 @@ import fnmatch
 import re
 
 
+def is_anonymous(class_name: str) -> bool:
+    """libclang 이 익명 구조체·공용체에 붙이는 이름인지 판정한다.
+
+    이 이름에는 파싱한 기계의 절대 경로와 줄 번호가 들어 있다
+    (`Ctx::(unnamed struct at /home/…/ipa_context.h:33:2)`). 설정의 어떤 패턴으로도 고를 수 없고,
+    줄이 밀리면 다른 이름이 되어 같은 구조체가 둘로 보인다.
+    """
+    return "(unnamed " in class_name or "(anonymous " in class_name
+
+
 def matches_symbol(name: str, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatchcase(name, p) or fnmatch.fnmatchcase(name.rsplit("::", 1)[-1], p) for p in patterns)
 

@@ -24,7 +24,7 @@ from .config import Config, section_output
 from .diagrams import diagram_block, section_diagram, sequence_diagram
 from .facts.model import ClassInfo, KnowledgeModel
 from .impact import ImpactReport
-from .matching import matches_symbol
+from .matching import is_anonymous, matches_symbol
 from .llm import Agent
 from .manuscript import describe, lint, unwrap
 from .validate import Verdict, check, extract_citations, normalize_citations, strip_echo, strip_headings
@@ -467,7 +467,7 @@ class Generator:
                 continue
             p = self.model.packages[name]
             # 익명 구조체의 libclang 이름에는 파싱한 기계의 절대 경로가 들어간다. 대표 클래스에서 뺀다.
-            named = [c for c in p.classes if not _is_anonymous(c)]
+            named = [c for c in p.classes if not is_anonymous(c)]
             reps = ", ".join(f"`{c}`" for c in named[:5]) or "(이름 있는 클래스 없음)"
             rows.append(f"| `{name}` | {len(p.classes)} | {reps} |")
         return "\n".join(rows)
@@ -726,15 +726,6 @@ def _hidden_message(m: Any, hide: dict[str, Any]) -> bool:
 def _pkg_selected(name: str, pats: list[str]) -> bool:
     """패키지 이름 glob. 경로 구분자를 특별히 다루지 않으므로 `src/*` 는 `src/ipa/ipu3` 에도 걸린다."""
     return any(fnmatch.fnmatch(name, p) for p in pats)
-
-
-def _is_anonymous(class_name: str) -> bool:
-    """libclang 이 익명 구조체·공용체에 붙이는 이름인지 판정한다.
-
-    이 이름에는 파싱한 기계의 절대 경로가 들어 있어서(예: `(unnamed struct at /home/.../ipa_context.h:33:2)`)
-    문서에 그대로 실으면 빌드 환경 경로가 노출되고 읽는 사람에게도 의미가 없다.
-    """
-    return "(unnamed " in class_name or "(anonymous " in class_name
 
 
 def _match_class(c: ClassInfo, sec: dict[str, Any]) -> bool:
