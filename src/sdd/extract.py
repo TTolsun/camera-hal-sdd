@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import compdb
 from .config import Config
-from .facts import callgraph, clang_uml, comments, flags
+from .facts import callgraph, clang_uml, comments, docblocks, flags
 from .facts.model import KnowledgeModel
 
 
@@ -58,6 +58,13 @@ def run(cfg: Config, skip_comments: bool = False, skip_clang_uml: bool = False,
         stats = comments.collect(model, cfg, entries)
         print(f"[comments] TU {stats['tus']} 개, 파싱 오류 {stats['errors']} 개, "
               f"클래스 {stats['classes']}, 메서드 {stats['methods']}, 함수 {stats['functions']}")
+
+    # 선언에 붙지 않은 문서 주석은 libclang 이 어디에도 주지 않는다. 클래스 설명이 구현 파일에
+    # 따로 적혀 있는 코드베이스에서는 이 단계가 없으면 설명이 통째로 빠진다.
+    doc = docblocks.collect(model, cfg, entries)
+    print(f"[docblocks] 문서 주석 블록 {doc['blocks']} 개에서 설명 {doc['filled']} 개를 채웠습니다. "
+          f"이름이 모호해 건너뜀 {doc['ambiguous']} 개, 사실에 없는 이름 {doc['unknown']} 개")
+    model.meta["docblocks"] = doc
 
     if backend == "libclang":
         stats = callgraph.collect(model, cfg, entries)
