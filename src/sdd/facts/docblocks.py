@@ -16,7 +16,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ..config import Config
-from .comments import _EXCLUDES
+from .comments import is_excluded
 from .model import KnowledgeModel, relpath
 
 # `/** ... */` 한 덩어리. 여는 기호가 `/**` 인 것만 문서 주석으로 본다.
@@ -25,11 +25,25 @@ _BLOCK = re.compile(r"/\*\*(.*?)\*/", re.S)
 _TAG = re.compile(r"[\\@](class|struct)\s+([A-Za-z_][\w:]*)")
 # `\brief 한 줄 설명`.
 _BRIEF = re.compile(r"[\\@]brief\s+([^\n]*)")
+# 같은 블록 안에서 멤버를 설명하기 시작하는 태그. 여기부터는 클래스 설명이 아니다.
+_MEMBER_TAG = re.compile(r"[\\@](fn|var|typedef|enum|property|namespace|file)\b")
 _JUNK = re.compile(r"^\s*\*\s?")
 
 
 def _brief_text(body: str) -> str:
-    m = _BRIEF.search(body)
+    r"""대상 태그 바로 뒤에 붙은 한 줄 설명만 읽는다.
+
+    한 블록이 클래스와 그 멤버를 함께 설명하기도 한다(`\struct X` 다음에 `\fn X::y`).
+    블록 전체에서 찾으면 클래스에 설명이 없을 때 멤버의 설명을 클래스 것으로 잘못 붙인다.
+    """
+    tag = _TAG.search(body)
+    if not tag:
+        return ""
+    rest = body[tag.end():]
+    member = _MEMBER_TAG.search(rest)
+    if member:
+        rest = rest[:member.start()]
+    m = _BRIEF.search(rest)
     if not m:
         return ""
     return " ".join(_JUNK.sub("", m.group(1)).split())[:200]
@@ -84,7 +98,7 @@ def collect(model: KnowledgeModel, cfg: Config, entries: list[dict[str, Any]]) -
     stats = {"files": 0, "blocks": 0, "filled": 0, "ambiguous": 0, "unknown": 0}
     for path in sorted(files):
         rel = relpath(str(path), root)
-        if any(x.fullmatch(rel) for x in _EXCLUDES) or not path.is_file():
+        if is_excluded(rel) or not path.is_file():
             continue
         try:
             text = path.read_text(encoding="utf-8", errors="replace")

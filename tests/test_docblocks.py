@@ -3,6 +3,8 @@
 from pathlib import Path
 
 from sdd.facts import comments, docblocks
+
+NL = chr(10)
 from sdd.facts.model import ClassInfo, KnowledgeModel, Location
 
 DOC = """
@@ -100,3 +102,29 @@ def test_제외한_경로는_읽지_않는다(tmp_path, tmp_cfg):
     assert stats["files"] == 0 and stats["filled"] == 0
     assert model.classes["hal::Camera"].brief == ""
     comments.set_excludes([])
+
+
+def test_멤버_설명을_클래스_설명으로_붙이지_않는다():
+    """한 블록이 클래스와 멤버를 함께 설명할 때, 클래스에 자기 설명이 없으면 비운다."""
+    doc = NL.join([
+        "/**",
+        " * BSclass Ctx",
+        " *",
+        " * BSfn Ctx::Ctx",
+        " * BSbrief 생성자 설명",
+        " */",
+    ]).replace("BS", chr(92))
+    assert docblocks.blocks(doc) == []
+
+
+def test_대상_태그의_설명만_읽는다():
+    doc = NL.join([
+        "/**",
+        " * BSstruct Ctx",
+        " * BSbrief 문맥 구조체",
+        " *",
+        " * BSvar Ctx::frames",
+        " * BSbrief 프레임 고리 버퍼",
+        " */",
+    ]).replace("BS", chr(92))
+    assert docblocks.blocks(doc) == [("Ctx", "문맥 구조체")]
