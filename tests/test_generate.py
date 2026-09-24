@@ -52,8 +52,11 @@ def test_dry_run_generates_all_pages_with_frame(tmp_cfg, sample_model):
     agent = Agent(tmp_cfg.agent, dump_dir=tmp_cfg.build_dir / "prompts")
     written = Generator(tmp_cfg, sample_model, agent).run()
     names = sorted(p.relative_to(tmp_cfg.sdd_dir).as_posix() for p in written)
-    assert names == ["components.md", "feature-flags.md", "index.md", "overview.md",
-                     "scenarios/index.md", "scenarios/process_capture_request.md", "threading.md"]
+    # 사람이 쓰는 문서(constraints, decisions)는 아직 없으므로 빈 자리를 만든다.
+    assert names == ["components.md", "constraints.md", "decisions.md", "feature-flags.md", "index.md",
+                     "overview.md", "scenarios/index.md", "scenarios/process_capture_request.md", "threading.md"]
+    stub = (tmp_cfg.sdd_dir / "constraints.md").read_text(encoding="utf-8")
+    assert "## 아직 작성되지 않았습니다" in stub and "status: needs-review" in stub
 
     overview = (tmp_cfg.sdd_dir / "overview.md").read_text(encoding="utf-8")
     # 페이지 뼈대: lead(굵게) -> 확인할 내용 표 -> 본문 -> 근거 -> 다음 단계
@@ -405,3 +408,28 @@ def test_사실을_주장하는_문단에는_계속_인용을_요구한다(sampl
     text = ("`CameraDevice` 는 요청을 큐에 넣습니다 `device/CameraDevice.h:40`.\n\n"
             "버퍼는 파이프라인이 해제합니다. 종료 순서는 확인해야 합니다.")
     assert "설명 문단에 근거 인용이 없습니다." in review(text, sample_model, {"device/CameraDevice.h:40"})
+
+
+
+def test_사람이_쓴_문서는_덮어쓰지_않는다(tmp_cfg, sample_model):
+    tmp_cfg.sdd_dir.mkdir(parents=True, exist_ok=True)
+    written_by_hand = '''
+---
+section: constraints
+---
+
+# 제약
+
+버퍼는 파이프라인이 해제합니다.
+'''
+    (tmp_cfg.sdd_dir / "constraints.md").write_text(written_by_hand, encoding="utf-8")
+    tmp_cfg.agent.kind = "fake"
+    Generator(tmp_cfg, sample_model, _FakeAgent([_GOOD])).run()
+    assert (tmp_cfg.sdd_dir / "constraints.md").read_text(encoding="utf-8") == written_by_hand
+
+
+def test_고른_섹션만_만들_때는_범위_밖_자리를_만들지_않는다(tmp_cfg, sample_model):
+    tmp_cfg.agent.kind = "fake"
+    Generator(tmp_cfg, sample_model, _FakeAgent([_GOOD])).run(section_ids=["overview"])
+    assert (tmp_cfg.sdd_dir / "overview.md").exists()
+    assert not (tmp_cfg.sdd_dir / "constraints.md").exists()
