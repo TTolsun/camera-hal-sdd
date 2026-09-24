@@ -203,7 +203,8 @@ def main(argv: list[str] | None = None) -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
     p = argparse.ArgumentParser(prog="sdd", description="Camera HAL SDD 자동 생성 파이프라인")
-    p.add_argument("--config", help="sdd.yaml 경로 (기본: 현재 디렉터리에서 위로 탐색)")
+    p.add_argument("--config", help="설정 파일 경로. 이름은 sdd.yaml 이 아니어도 된다 "
+                   "(기본: 현재 디렉터리에서 위로 sdd.yaml 탐색). 로컬 덮어쓰기는 같은 이름의 .local.yaml")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("doctor").set_defaults(fn=cmd_doctor)

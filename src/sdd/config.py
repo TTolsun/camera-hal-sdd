@@ -137,7 +137,14 @@ def find_root(start: Path | None = None) -> Path:
 
 def load(path: Path | None = None) -> Config:
     root = path.parent.resolve() if path else find_root()
-    raw = _deep_merge(_load_yaml(root / "sdd.yaml"), _load_yaml(root / "sdd.local.yaml"))
+    # 지정한 파일을 그대로 읽는다. 이름을 버리고 sdd.yaml 만 읽으면, 한 디렉터리에 설정을 여럿 둔
+    # 실행(두 커밋 비교 등)에서 지정하지 않은 설정이 조용히 돌고 그 사실이 로그에 드러나지 않는다.
+    main = path.resolve() if path else root / "sdd.yaml"
+    if not main.is_file():
+        raise FileNotFoundError(f"설정 파일을 찾지 못했습니다: {main}")
+    # 로컬 덮어쓰기는 같은 이름 옆에 둔다: sdd.yaml -> sdd.local.yaml, sdd.a.yaml -> sdd.a.local.yaml
+    local = main.with_name(f"{main.stem}.local{main.suffix}")
+    raw = _deep_merge(_load_yaml(main), _load_yaml(local))
 
     def rel(p: str | None, default: str) -> Path:
         return (root / (p or default)).resolve()
