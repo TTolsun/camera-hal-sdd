@@ -82,7 +82,8 @@ sections:
   - include/libcamera/**
   - src/libcamera/camera*.cpp
   - src/libcamera/request.cpp
-  - '**/meson.build'
+  - src/libcamera/meson.build
+  - include/libcamera/meson.build
   - meson.options
   - meson_options.txt
   next:
@@ -276,7 +277,7 @@ sections:
   - src/libcamera/pipeline/**
   - src/libcamera/pipeline_handler.cpp
   - include/libcamera/internal/pipeline_handler.h
-  - '**/meson.build'
+  - src/libcamera/pipeline/**/meson.build
   - meson.options
   - meson_options.txt
   next:
@@ -306,7 +307,8 @@ sections:
   - src/libcamera/proxy/**
   - include/libcamera/ipa/**
   - include/libcamera/internal/ipa*
-  - '**/meson.build'
+  - src/ipa/**/meson.build
+  - src/libcamera/proxy/**/meson.build
   - meson.options
   - meson_options.txt
   next:
