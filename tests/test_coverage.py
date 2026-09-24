@@ -176,3 +176,26 @@ def test_cli_rejects_facts_from_wrong_revision(tmp_cfg, stale_side):
         args += ['--base-facts', str(previous)]
     assert main(args) == 1
     assert not (tmp_cfg.build_dir / 'impact.json').exists()
+
+
+def test_익명_구조체는_범위_검토_항목이_아니다(tmp_cfg):
+    """설정의 어떤 패턴으로도 고를 수 없으므로 보고해도 해결할 방법이 없다."""
+    anon = 'Ctx::(unnamed struct at /home/someone/build/src/ctx.h:33:2)'
+    sections(tmp_cfg, [{'id': 'ipa', 'watch': ['src/**'], 'facts': {'classes': ['Ctx']}}])
+    model = KnowledgeModel(classes={
+        'Ctx': ClassInfo('Ctx', Location('src/ctx.h', 10)),
+        anon: ClassInfo(anon, Location('src/ctx.h', 33)),
+    })
+    report = compute(tmp_cfg, model, ['src/ctx.h'], 'a', 'b')
+    names = [f['name'] for f in report.coverage['findings']]
+    assert anon not in names
+    assert '/home/someone' not in review_markdown(report)
+    # 익명 구조체를 담은 클래스는 그대로 범위에 잡힌다.
+    assert any(item['name'] == 'Ctx' for item in report.coverage['entities'])
+
+
+def test_고를_수_있는_클래스는_계속_보고한다(tmp_cfg):
+    sections(tmp_cfg, [{'id': 'ipa', 'watch': ['src/**'], 'facts': {'classes': ['Manager']}}])
+    model = KnowledgeModel(classes={'Ctx': ClassInfo('Ctx', Location('src/ctx.h', 10))})
+    report = compute(tmp_cfg, model, ['src/ctx.h'], 'a', 'b')
+    assert [f['name'] for f in report.coverage['findings']] == ['Ctx']

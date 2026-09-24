@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .facts.model import KnowledgeModel
-from .matching import match_any, matches_symbol
+from .matching import is_anonymous, match_any, matches_symbol
 
 
 def _select_sections(kind: str, name: str, snapshot: KnowledgeModel, sections: list[dict]) -> set[str]:
@@ -37,6 +37,10 @@ def audit(model: KnowledgeModel, files: list[str],
             continue
         for kind, collection in [("class", snapshot.classes), ("function", snapshot.functions)]:
             for name, entity in collection.items():
+                # 익명 구조체는 어떤 문서 설정으로도 선택할 수 없으므로 "선택하는 문서가 없다" 는
+                # 보고가 영구적으로 남는다. 그 구조체를 담은 바깥 클래스가 같은 파일을 이미 다룬다.
+                if kind == "class" and is_anonymous(name):
+                    continue
                 if kind == "class":
                     locations = [entity.loc] + [loc for method in entity.methods for loc in (method.loc, method.def_loc)]
                 else:
