@@ -95,6 +95,11 @@ _EXCLUDES: list[re.Pattern[str]] = []
 _UNDER_CACHE: dict[str, bool] = {}
 
 
+def is_excluded(rel: str) -> bool:
+    """소스 루트 기준 상대 경로가 cfg.source.exclude 에 걸리는가."""
+    return any(p.fullmatch(rel) for p in _EXCLUDES)
+
+
 def set_excludes(patterns: list[str]) -> None:
     from ..matching import glob_to_regex
 
