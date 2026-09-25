@@ -77,6 +77,77 @@ def generate_simple(cfg: Config) -> Path:
     return cfg.compile_commands
 
 
+def _absolute_paths(argv: list[str], directory: Path) -> list[str]:
+    """컴파일 인자의 상대 경로를 entry 의 directory 기준 절대 경로로 바꾼다.
+
+    libclang 은 compile DB 의 directory 로 chdir 하지 않으므로, 상대 -I 가 남아 있으면
+    다른 디렉터리에서 실행할 때 헤더를 찾지 못한다 (libcamera 실측: TU 171 개 전부 파싱 실패).
+    """
+    options = ("-include-pch", "-isystem", "-iquote", "-idirafter", "-imacros", "-include",
+               "-isysroot", "-I", "-F")
+
+    def resolve(value: str) -> str:
+        path = Path(value)
+        return str((directory / path).resolve()) if not path.is_absolute() else value
+
+    result: list[str] = []
+    pending = False
+    for token in argv:
+        if pending:
+            result.append(resolve(token))
+            pending = False
+        elif token in options:
+            result.append(token)
+            pending = True
+        elif token.startswith("--sysroot="):
+            result.append("--sysroot=" + resolve(token.split("=", 1)[1]))
+        elif token.startswith("@"):
+            raise RuntimeError("응답 파일(@...)을 먼저 풀어야 compile DB 를 정규화할 수 있습니다.")
+        else:
+            for option in options:
+                if token.startswith(option) and len(token) > len(option):
+                    result.append(option + resolve(token[len(option):]))
+                    break
+            else:
+                result.append(token)
+    if pending:
+        raise RuntimeError("컴파일 옵션 뒤에 와야 할 경로가 없습니다.")
+    return result
+
+
+def clang_resource_dir(clang: str = "clang") -> Path:
+    """clang 내장 헤더 디렉터리. pip libclang 휠에는 stddef.h 같은 내장 헤더가 없다."""
+    resource = Path(subprocess.check_output([clang, "-print-resource-dir"], text=True).strip()).resolve()
+    if not (resource / "include" / "stddef.h").is_file():
+        raise RuntimeError(f"clang 내장 헤더가 없습니다: {resource}")
+    return resource
+
+
+def normalize(entries: list[dict[str, Any]], resource_dir: Path | None = None) -> list[dict[str, Any]]:
+    """빌드 시스템이 만든 compile DB 를 libclang 이 어디서든 읽을 수 있는 형태로 바꾼다.
+
+    Meson·Soong·CMake 가 만든 DB 공통으로 필요한 두 가지 조정이다.
+    1. 상대 경로를 절대 경로로 바꾸고 -working-directory 를 채운다.
+    2. resource_dir 가 있으면 -resource-dir 를 채운다 (pip libclang 의 내장 헤더 부재 대응).
+    원본 목록은 바꾸지 않고 새 목록을 돌려준다.
+    """
+    out: list[dict[str, Any]] = []
+    for entry in entries:
+        directory = Path(str(entry.get("directory", ".")))
+        if not directory.is_absolute():
+            directory = Path.cwd() / directory
+        directory = directory.resolve()
+        source = Path(str(entry.get("file", "")))
+        if not source.is_absolute():
+            source = directory / source
+        argv = _absolute_paths(_argv(entry), directory)
+        argv.append(f"-working-directory={directory}")
+        if resource_dir is not None:
+            argv.append(f"-resource-dir={resource_dir}")
+        out.append({"directory": str(directory), "file": str(source.resolve()), "arguments": argv})
+    return out
+
+
 def ensure(cfg: Config, regenerate: bool = False) -> Path:
     if cfg.compile_commands.exists() and not regenerate:
         return cfg.compile_commands

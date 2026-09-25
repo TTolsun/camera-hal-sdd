@@ -10,6 +10,10 @@ SOLID 원칙 중 단일 책임과 의존 방향을 우선 적용합니다. 실�
 | `impact.py` | 설정과 근거를 모아 재생성 대상을 계산하고 보고서를 구성합니다. |
 | `coverage.py` | 주입받은 facts·섹션·근거 목록에서 문서 범위 누락을 판단합니다. Config·Git·파일에 접근하지 않습니다. |
 | `impact_review.py` | 검사 결과를 Markdown으로 표현합니다. 분석하거나 저장하지 않습니다. |
+| `approvals.py` | 사람 검토 승인을 본문 해시와 함께 장부에 기록·판정합니다. 승인을 자동으로 만들지 않습니다. |
+| `update.py` | 새 커밋을 차례로 처리하는 증분 갱신 orchestration입니다. 순서·재개는 Git과 상태 파일이 보장하고, 관문 판정은 `approvals.py`와 원고 상태를 읽습니다. |
+| `compdb.py` | compile DB 확보(ndk-build·simple)와 정규화(절대 경로, `-working-directory`, `-resource-dir`)를 담당합니다. |
+| `mermaid_assets.py` | Mermaid ESM 배포본(본체 + chunk)을 tarball에서 꺼내 오프라인 자산으로 놓습니다. |
 | `cli.py` | 입력을 검증하고 각 기능을 연결하며 결과를 저장·출력합니다. |
 
 이전의 `impact → coverage → impact` 순환 의존을 제거했습니다. 사실 추출기의 제외 규칙도 영향 분석 모듈 대신 `matching.py`를 사용합니다. 수동 문서 메타데이터는 검사 한 번당 한 번 읽고, 범위 판정에는 읽은 값을 전달합니다.

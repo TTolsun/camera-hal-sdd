@@ -47,13 +47,17 @@ agent:
 site:
   enabled: true
   title: Camera HAL 설계 문서
-  source_url: <사내 코드 열람 주소>       # 인용을 코드로 연결할 주소 형식
+  source_url: <사내 코드 열람 주소>       # 인용을 코드로 연결할 주소
+  source_link: gitiles                   # Gerrit Gitiles 는 gitiles, GitHub/GHE 는 github(기본)
+  # source_link_template: "{url}/browse/{file}?at={commit}#{line}"   # 그 밖의 호스트
+  mermaid_dir: assets/mermaid            # sdd fetch-mermaid 가 준비한 사본을 사이트에 동봉
+  require_approval: true                 # 사람 검토 승인 없는 문서는 게시 중단
   nav_groups: ["시작하기", "For Users", "For Developers"]
 ```
 
 `package_depth`는 libcamera에서 실제로 문제가 됐던 값입니다. 소스가 `src/`와 `include/` 아래로만 나뉘면 기본값 1은 패키지를 세 개로 뭉쳐서 개요의 패키지 표가 쓸모없어집니다. 추출 후 `facts.json`의 `packages` 개수를 보고 정합니다.
 
-`source_url`은 GitHub 형식(`<url>/blob/<sha>/<파일>#L<줄>`)을 가정합니다. 사내 코드 열람 도구의 링크 형식이 다르면 이 부분을 맞춰야 합니다.
+인용 링크 형식은 `source_link`(github·gitiles) 또는 `source_link_template`으로 코드 열람 도구에 맞춥니다. 템플릿의 자리표시자는 `{url}` `{commit}` `{file}` `{line}` 네 개이며, 어긋난 템플릿은 export-site 가 즉시 거부합니다.
 
 ### config/scenarios.yaml
 
@@ -85,14 +89,14 @@ defaults:
 
 ### 사내 자산
 
-Mermaid를 사내 경로에서 불러오도록 지정합니다. `sdd.yaml`의 `site.mermaid`에 적거나, 실행할 때 `--mermaid`로 넘깁니다. 사이트 루트 기준 로컬 경로도 받습니다.
+Mermaid ESM 배포본은 `sdd fetch-mermaid`로 준비합니다. 본체와 chunk 모듈을 함께 가져와야 그림이 뜨며, 이 명령이 그 구조를 만들어 줍니다.
 
-```yaml
-site:
-  mermaid: assets/mermaid.esm.min.mjs      # 사이트 루트 기준 경로 또는 사내 주소
+```bash
+uv run sdd --config <사내설정>/sdd.yaml fetch-mermaid                       # npm 접근이 되는 곳에서
+uv run sdd --config <사내설정>/sdd.yaml fetch-mermaid --tarball mermaid-11.12.0.tgz   # 망 분리 반입
 ```
 
-지정하지 않으면 `https://cdn.jsdelivr.net/npm/mermaid@11/...`을 그대로 씁니다. 엔드포인트 설정만으로 외부 통신이 차단되는 것은 아니므로, 실행 환경의 통신 경계도 함께 확인해야 합니다.
+위의 `site.mermaid_dir` 설정을 두면 export-site 가 이 사본을 사이트 산출물의 `assets/mermaid/`로 복사해 동봉하므로, 페이지에 CDN 주소가 남지 않습니다. 이미 사내 웹 서버에 호스팅한 주소가 있으면 `site.mermaid`로 그 주소만 지정해도 됩니다. 지정하지 않으면 `https://cdn.jsdelivr.net/npm/mermaid@11/...`을 그대로 씁니다. 엔드포인트 설정만으로 외부 통신이 차단되는 것은 아니므로, 실행 환경의 통신 경계도 함께 확인해야 합니다.
 
 ## 3. 실행 순서
 
@@ -114,7 +118,35 @@ uv run sdd --config <사내설정>/sdd.yaml verify-site
 | `generate` | `status: needs-review` 페이지 목록 | 사유가 각 페이지의 근거 블록에 적혀 있습니다. |
 | `verify-site` | `broken_links: 0` | 링크가 깨진 채로 게시하지 않습니다. |
 
-Windows에서 Meson이나 NDK 빌드가 어려우면 libcamera 검증과 같은 방식을 씁니다. Linux에서 추출까지 수행하고 `facts.json`을 옮긴 뒤, LLM 호출이 가능한 환경에서 생성합니다. 이때 compile DB의 상대 경로와 clang 내장 헤더 때문에 파싱이 실패할 수 있으므로, `examples/libcamera/prepare_compdb.py`처럼 경로를 절대 경로로 바꾸고 `-resource-dir`를 채우는 과정이 필요합니다.
+compile DB 는 빌드 시스템별로 이렇게 확보합니다.
+
+| 빌드 시스템 | 확보 방법 |
+|---|---|
+| NDK-build | `sdd compdb` (`source.ndk_build.enabled: true`) |
+| Soong (AOSP) | `SOONG_GEN_COMPDB=1 SOONG_GEN_COMPDB_DEBUG=1 m nothing` 후 `out/soong/development/ide/compdb/compile_commands.json` |
+| CMake | `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON` |
+| Meson | 빌드 디렉터리에 `compile_commands.json` 생성됨 |
+
+어느 빌드가 만든 DB든 그대로 넘기면 상대 경로와 clang 내장 헤더 때문에 파싱이 전부 실패할 수 있습니다(libcamera 실측: TU 171개 전부 실패). `sdd compdb --normalize`가 경로를 절대 경로로 바꾸고 `-working-directory`를 채우며, `--clang <실행 파일>`을 주면 `-resource-dir`도 채웁니다. 정규화본은 원본과 별도 파일로 쓰고 `source.compile_commands`가 그 파일을 가리키게 합니다.
+
+```bash
+uv run sdd --config <사내설정>/sdd.yaml compdb --normalize --normalize-input <빌드출력>/compile_commands.json --clang clang --out <사내설정>/build/compile_commands.json
+```
+
+Windows에서 Meson이나 NDK 빌드가 어려우면 libcamera 검증과 같은 방식을 씁니다. Linux에서 추출까지 수행하고 `facts.json`을 옮긴 뒤, LLM 호출이 가능한 환경에서 생성합니다. clang-uml 은 없어도 libclang 대체 분석으로 동작하며(`doctor`가 경고로 알림), 그 경우 템플릿 관계·조건 분기·include 그래프가 빠집니다.
+
+### 반복 운영: 승인과 증분 갱신
+
+첫 전체 생성이 끝난 뒤에는 커밋 단위로 반복합니다.
+
+1. **증분 갱신.** `sdd update --to <브랜치>`가 마지막으로 처리한 커밋 이후의 커밋을 오래된 것부터 하나씩 추출·영향 분석·생성합니다. 순서는 `git rev-list`가 보장하고, 실패한 커밋은 완료로 기록하지 않으므로 다음 실행이 같은 커밋부터 재시도합니다. 처리 중 소스를 detached 로 체크아웃했다가 끝나면 원래 브랜치로 되돌립니다. 빌드 구성이 바뀌는 저장소는 `update.compdb_cmd`에 compile DB 재생성 명령을 둡니다. Gerrit 이벤트 훅이나 사내 CI 주기 작업에서 이 명령 하나를 부르면 되고, 수동 폴링은 `--watch --fetch`로 대신할 수 있습니다.
+2. **관문.** 승인되지 않은 범위 검토 항목이 있으면 생성 전에(종료 코드 2), 생성 결과에 `needs-review` 페이지가 남으면 다음 커밋 전에(종료 코드 3) 멈춥니다. 자동 게시는 하지 않습니다.
+3. **승인.** 사람이 검토를 마치면 `sdd accept <문서.md>`(원고 승인)과 `sdd accept --finding <장부 키>`(범위 항목 승인)로 장부에 기록합니다. `site.require_approval: true`와 함께 쓰면 승인 없는 문서는 게시되지 않습니다.
+4. **게시.** `export-site` 출력을 사내 웹 서버 경로에 반영합니다. 이 단계만 사람이 수행합니다.
+
+### 생성 모델 비교
+
+문장 품질은 모델에 크게 좌우됩니다(4B 로컬 모델 실측: 표기·인용은 자동 검사로 보완했지만 설명 깊이는 한계). 사내 엔드포인트가 준비되면 같은 facts 로 모델만 바꿔 비교하세요. 출력 디렉터리를 분리한 설정 사본에서 `agent.kind: openai-compatible`과 `base_url`·`model`만 바꿔 `generate`를 실행하면 입력이 고정되어 문장 차이만 남습니다. 검사 통과율이 아니라, 표만으로 알 수 없는 것을 설명하는지와 확인되지 않은 것을 확인되지 않았다고 적는지를 봅니다.
 
 ## 4. 환경 없이 준비할 수 있는 것
 

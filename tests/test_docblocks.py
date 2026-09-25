@@ -74,6 +74,42 @@ def test_한정_이름은_그대로_찾는다():
     assert docblocks.resolve("hal::Camera", model) == "hal::Camera"
 
 
+def test_한정_이름의_앞부분까지_후보의_꼬리와_대조한다():
+    """중첩 클래스의 멤버 구조체는 마지막 마디만 보면 겹치지만, 적힌 한정 이름으로 갈린다."""
+    model = KnowledgeModel(classes={
+        "ipa::AgcMeanLuminance::Params": ClassInfo("ipa::AgcMeanLuminance::Params",
+                                                   Location("libipa/agc_mean_luminance.h", 30)),
+        "ipa::AgcMSV::Params": ClassInfo("ipa::AgcMSV::Params", Location("libipa/agc_msv.h", 20)),
+    })
+    assert docblocks.resolve("Params", model) is None
+    assert docblocks.resolve("AgcMeanLuminance::Params", model) == "ipa::AgcMeanLuminance::Params"
+    assert docblocks.resolve("AgcMSV::Params", model) == "ipa::AgcMSV::Params"
+    assert docblocks.resolve("Other::Params", model) is None       # 어느 꼬리와도 안 맞으면 비운다
+
+
+def test_파일의_네임스페이스_선언으로_후보를_좁힌다():
+    model = KnowledgeModel(classes={
+        "ipa::agc::ActiveState": ClassInfo("ipa::agc::ActiveState", Location("libipa/agc.h", 12)),
+        "ipa::awb::ActiveState": ClassInfo("ipa::awb::ActiveState", Location("libipa/awb.h", 12)),
+    })
+    assert docblocks.resolve("ActiveState", model) is None
+    assert docblocks.resolve("ActiveState", model,
+                             namespaces=frozenset({"ipa", "agc"})) == "ipa::agc::ActiveState"
+    # 두 네임스페이스가 모두 선언된 파일에서는 하나로 좁혀지지 않으므로 비운다.
+    assert docblocks.resolve("ActiveState", model,
+                             namespaces=frozenset({"ipa", "agc", "awb"})) is None
+
+
+def test_using_namespace_는_선언으로_치지_않는다():
+    text = NL.join([
+        "using namespace foreign;",
+        "namespace ipa::agc {",
+        "inline namespace v1 {",
+        "} }",
+    ])
+    assert docblocks.file_namespaces(text) == frozenset({"ipa", "agc", "v1"})
+
+
 def test_선언에_붙은_주석을_덮어쓰지_않는다(tmp_path, tmp_cfg):
     src = tmp_path / "src"
     (src / "device").mkdir(parents=True)

@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from .approvals import finding_key, finding_state
 
 if TYPE_CHECKING:
     from .impact import ImpactReport
 
 
-def review_markdown(report: ImpactReport) -> str:
+def review_markdown(report: ImpactReport, ledger: dict[str, Any] | None = None) -> str:
     coverage = report.coverage
+    ledger = ledger or {}
     lines = ["# 변경 문서 범위 검토", "", f"비교 범위: `{report.base}..{report.head}`", ""]
     if not coverage:
         return "\n".join(lines + ["범위 검사가 없는 이전 영향 보고서입니다. impact를 다시 실행하세요.", ""])
@@ -19,9 +22,13 @@ def review_markdown(report: ImpactReport) -> str:
     labels = {"entity-outside-document-scope": "클래스·함수를 선택하는 문서가 없습니다",
               "document-not-scheduled": "대응 문서는 있지만 재생성 대상으로 선택되지 않았습니다",
               "no-extracted-entity": "추출한 클래스·함수와 연결되지 않아 범위를 확인할 수 없습니다"}
+    state_labels = {"accepted": "장부에서 승인됨 · 관문 제외",
+                    "deferred": "장부에서 보류됨 · 관문 유지", "open": "미결"}
     for item in coverage["findings"]:
-        lines += [f"- `{item['name']}`: {labels[item['reason']]}.",
-                  "  근거 파일: " + ", ".join(f"`{f}`" for f in item["files"]) + "."]
+        state = finding_state(ledger, item) if ledger else "open"
+        lines += [f"- `{item['name']}`: {labels[item['reason']]}. ({state_labels[state]})",
+                  "  근거 파일: " + ", ".join(f"`{f}`" for f in item["files"]) + ".",
+                  f"  장부 키: `{finding_key(item)}` (승인: `sdd accept --finding \"{finding_key(item)}\"`)"]
     if not coverage["findings"]:
         lines.append("현재 추출 사실과 설정에서 범위 누락을 찾지 못했습니다.")
     lines += ["", "## 파일 감시와 수동 검토 연결", ""]

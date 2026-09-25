@@ -18,7 +18,37 @@ from .export_html import _mermaid_fence, _nav_entries, _split, _title_of_text
 from .facts.model import KnowledgeModel
 
 MERMAID = "https://cdn.jsdelivr.net/npm/mermaid@11.12.0/dist/mermaid.esm.min.mjs"
+MERMAID_ENTRY = "mermaid.esm.min.mjs"
 ASSETS = Path(__file__).parent / "site_assets"
+
+# 소스 열람 호스트별 인용 링크 형식. 커밋 확인(40자리 hex)과 경로 검증은 형식과 무관하게 적용된다.
+SOURCE_LINK_TEMPLATES = {
+    "github": "{url}/blob/{commit}/{file}#L{line}",
+    "gitiles": "{url}/+/{commit}/{file}#{line}",
+}
+
+
+def source_link_template(settings: dict) -> str:
+    """site 설정에서 인용 링크 템플릿을 정한다.
+
+    `site.source_link_template` 이 있으면 그대로 쓰고, 없으면 `site.source_link` 가 가리키는
+    호스트 형식(github 기본, gitiles)을 쓴다. 자리표시자가 어긋난 템플릿은 게시 시점에 조용히
+    깨진 링크를 만들므로 여기서 즉시 실패시킨다.
+    """
+    template = str(settings.get("source_link_template") or "")
+    if not template:
+        host = str(settings.get("source_link", "github"))
+        template = SOURCE_LINK_TEMPLATES.get(host, "")
+        if not template:
+            raise RuntimeError(f"site.source_link 값을 모릅니다: {host} "
+                               f"(지원: {', '.join(sorted(SOURCE_LINK_TEMPLATES))}. "
+                               "다른 호스트는 site.source_link_template 로 형식을 지정하세요)")
+    try:
+        template.format(url="u", commit="c", file="f", line=1)
+    except (KeyError, IndexError, ValueError) as e:
+        raise RuntimeError("site.source_link_template 의 자리표시자는 {url} {commit} {file} {line} "
+                           f"만 쓸 수 있습니다: {e}")
+    return template
 
 
 def _path(rel: str) -> str:
@@ -37,15 +67,24 @@ def _html_path(rel: str) -> str:
 
 
 
-def _status(meta: dict) -> str:
+def _approval_label(state: str, entry: dict | None) -> str:
+    if state == "approved" and entry:
+        return f"사람 검토 승인 · {entry.get('approved_by', '')} {str(entry.get('approved_at', ''))[:10]}".rstrip()
+    if state == "stale":
+        return "승인 이후 본문 변경 · 재검토 필요"
+    return "사람 검토 전"
+
+
+def _status(meta: dict, approval: str = "unreviewed", approval_entry: dict | None = None) -> str:
     status = str(meta.get("status", "unrecorded"))
     check_name = "자동 검사" if meta.get("semantic_review") else "인용 검사"
     label = {"ok": f"{check_name} 통과", "needs-review": f"{check_name} 확인 필요"}.get(status, f"{check_name} 미기록")
-    return f'<span class="review-state">사람 검토 전</span><span>{label} · <code>{html.escape(status)}</code></span>'
+    return (f'<span class="review-state">{html.escape(_approval_label(approval, approval_entry))}</span>'
+            f'<span>{label} · <code>{html.escape(status)}</code></span>')
 
 
 def _render(body: str, rel: str, known: set[str], model: KnowledgeModel | None,
-            source_url: str, commit: str) -> tuple[str, str, list[dict]]:
+            source_url: str, commit: str, link_template: str = SOURCE_LINK_TEMPLATES["github"]) -> tuple[str, str, list[dict]]:
     def slug(value: str, separator: str) -> str:
         return re.sub(r"[-\s]+", separator, re.sub(r"[^\w\s-]", "", value.lower().strip()))
 
@@ -78,7 +117,8 @@ def _render(body: str, rel: str, known: set[str], model: KnowledgeModel | None,
             file, line = cite.rsplit(":", 1)
             if PurePosixPath(file).is_absolute() or ".." in PurePosixPath(file).parts:
                 return match[0]
-            url = f"{source_url.rstrip('/')}/blob/{commit}/{quote(file, safe='/')}#L{line}"
+            url = link_template.format(url=source_url.rstrip("/"), commit=commit,
+                                       file=quote(file, safe="/"), line=line)
             return f'<a class="citation" href="{html.escape(url, quote=True)}">{match[0]}</a>'
 
         rendered = re.sub(r"<code>([^<>]+:\d+)</code>", citation, rendered)
@@ -138,7 +178,12 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
     settings = cfg.raw.get("site", {}) or {}
     title = str(settings.get("title", "Camera HAL SDD"))
     source_url = str(settings.get("source_url", ""))
-    mermaid_src = mermaid_src or str(settings.get("mermaid", MERMAID))
+    link_template = source_link_template(settings)
+    # Mermaid 우선순위: --mermaid > site.mermaid > site.mermaid_dir(사이트에 동봉) > 공개 CDN.
+    mermaid_dir = settings.get("mermaid_dir")
+    mermaid_src = mermaid_src or str(settings.get("mermaid") or "")
+    if not mermaid_src:
+        mermaid_src = f"assets/mermaid/{MERMAID_ENTRY}" if mermaid_dir else MERMAID
     out = (out or cfg.build_dir / "site").resolve()
     if out == cfg.sdd_dir.resolve() or out in cfg.sdd_dir.resolve().parents:
         raise RuntimeError("Site output must be separate from the Markdown source directory")
@@ -168,6 +213,15 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
     entries = _grouped(entries, [str(g) for g in (settings.get("nav_groups") or [])])
     entries = _place_scenarios(entries, [sc["id"] for sc in cfg.scenarios()])
     texts = {rel: (cfg.sdd_dir / rel).read_text(encoding="utf-8") for _, _, rel in entries}
+    # 사람 승인 장부. 표시가 검사 결과를 바꾸지는 않지만, 승인·미승인 상태를 구분해 보여 준다.
+    from . import approvals as approvals_mod
+    ledger = approvals_mod.load(cfg)
+    approval_states = {rel: approvals_mod.page_status(ledger, rel, texts[rel]) for rel in texts}
+    if settings.get("require_approval", False):
+        blocked = sorted(rel for rel, state in approval_states.items() if state != "approved")
+        if blocked:
+            raise RuntimeError("site.require_approval: 사람 검토 승인이 없는 문서가 있어 게시를 중단합니다: "
+                               + ", ".join(blocked) + " (`sdd accept <문서>` 로 승인 기록)")
     if "index.md" not in texts:
         intro = settings.get("intro")
         if intro:
@@ -177,8 +231,10 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
         texts["index.md"] += "\n## 문서 목록\n\n| 문서 | 인용 검사 | 검토 상태 |\n|---|---|---|\n"
         for _, name, rel in entries:
             status = _split(texts[rel])[0].get("status", "unrecorded")
-            texts["index.md"] += f"| [{name}]({rel}) | `{status}` | 사람 검토 전 |\n"
+            label = _approval_label(approval_states.get(rel, "unreviewed"), ledger["pages"].get(rel))
+            texts["index.md"] += f"| [{name}]({rel}) | `{status}` | {label} |\n"
         entries.insert(0, ("시작하기", "문서 안내", "index.md"))
+        approval_states["index.md"] = "unreviewed"
     model = KnowledgeModel.load(cfg.facts_path) if cfg.facts_path.exists() else None
     if model is None and any(s.get("kind", "prose") == "prose" and s.get("facts", {}).get("classes")
                             and {**(cfg.raw.get("diagrams") or {}), **(s.get("diagram") or {})}.get("enabled", False)
@@ -217,7 +273,8 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
                     body = parts[1] + parts[3] + block + parts[2] + marker + after
                 else:
                     body = before + block + marker + after
-        content, toc, tokens = _render(body, rel, known, model, source_url, str(meta.get("source_commit", "")))
+        content, toc, tokens = _render(body, rel, known, model, source_url, str(meta.get("source_commit", "")),
+                                       link_template)
         rendered_pages[rel] = (page_title, meta, content, toc)
         search.append({"title": page_title, "page": page_title, "url": _html_path(rel)})
 
@@ -230,6 +287,14 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
         headings(tokens)
     out.mkdir(parents=True, exist_ok=True)
     shutil.copytree(ASSETS, out / "assets", dirs_exist_ok=True)
+    if mermaid_dir:
+        # Mermaid ESM 은 본체 옆 chunks/ 를 상대 경로로 불러오므로 디렉터리째 사이트에 담는다.
+        # 그래야 CDN 없는 사내망·오프라인 열람에서도 그림이 뜬다. `sdd fetch-mermaid` 가 이 구조를 만든다.
+        src_dir = (cfg.root / str(mermaid_dir)).resolve()
+        if not (src_dir / MERMAID_ENTRY).is_file():
+            raise RuntimeError(f"site.mermaid_dir 에 {MERMAID_ENTRY} 가 없습니다: {src_dir} "
+                               "(`sdd fetch-mermaid` 로 준비하세요)")
+        shutil.copytree(src_dir, out / "assets" / "mermaid", dirs_exist_ok=True)
     (out / ".nojekyll").write_text("", encoding="utf-8")
     for index, (group, name, rel) in enumerate(entries):
         current = _html_path(rel)
@@ -280,7 +345,8 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
             (out / mmd).write_text(diagram_sources[rel] + "\n", encoding="utf-8", newline="\n")
             downloads += f' <a href="{_href(mmd, current)}">Mermaid 원문 ↗</a>'
         evidence = f'<section class="evidence"><h2 id="page-evidence">생성 근거</h2><dl>{"".join(info)}</dl>{downloads}</section>' if info else ""
-        status = _status(meta) if meta else '<span class="review-state">검토용 문서</span>'
+        status = (_status(meta, approval_states.get(rel, "unreviewed"), ledger["pages"].get(rel))
+                  if meta else '<span class="review-state">검토용 문서</span>')
         config_json = json.dumps({"root": root, "mermaid": mermaid_src}, ensure_ascii=False).replace("<", "\\u003c")
         doc = f'''<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

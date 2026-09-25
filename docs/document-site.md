@@ -2,7 +2,14 @@
 
 **문서 생성과 디자인 기술은 `camera-hal-sdd-generator`에서 관리하고, 출력만 문서 저장소에 배포합니다.**
 
-`sdd export-site`는 기존 Markdown과 facts를 읽어 여러 페이지로 구성된 정적 사이트를 만듭니다. LLM을 다시 호출하지 않으며 원본 Markdown, 자동 인용 검사 결과, 생성 시각을 변경하지 않습니다. 현재 생성기는 사람의 승인 기록을 관리하지 않으므로 사이트에도 사람 검토 전으로 표시합니다.
+`sdd export-site`는 기존 Markdown과 facts를 읽어 여러 페이지로 구성된 정적 사이트를 만듭니다. LLM을 다시 호출하지 않으며 원본 Markdown, 자동 인용 검사 결과, 생성 시각을 변경하지 않습니다.
+
+사람의 승인은 `sdd accept`가 원고 옆의 장부(`sdd/approvals.json`)에 기록합니다. 사이트는 각 페이지에 승인 상태(승인·승인 이후 본문 변경·사람 검토 전)를 표시하고, `site.require_approval: true`를 두면 승인되지 않은 문서가 있을 때 게시를 중단합니다. 승인은 본문 해시에 붙으므로 본문이 바뀌면 자동으로 재검토 대상이 되고, 근거 재검증만 거친 이월(본문 동일)에서는 유지됩니다.
+
+```yaml
+site:
+  require_approval: true    # 미승인·본문 변경 문서가 있으면 export-site 를 중단한다
+```
 
 유지보수 기준은 [DESIGN.md](../DESIGN.md)입니다. 그림 생성은 `src/sdd/diagrams.py`, 페이지 배치는 `src/sdd/export_site.py`, 출력 검증·관리는 `src/sdd/site_build.py`, 공통 화면 자산은 `src/sdd/site_assets/`에서 관리합니다. 변경을 생성기에 반영하면 다음 빌드부터 모든 페이지에 적용됩니다.
 
@@ -61,7 +68,16 @@ site:
   source_url: https://github.com/TTolsun/libcamera-sdd
 ```
 
-`intro`는 설정 파일 기준의 안내 원고입니다. 생략하면 짧은 기본 안내를 만듭니다. 페이지는 `sections.yaml` 순서를 따르며 추가 MkDocs·시나리오 페이지를 뒤에 연결합니다. `source_url`은 선택 사항이며 GitHub/GHE의 `/blob/<commit>/<file>#L<line>` 주소 형식을 사용합니다. 해당 커밋이 실제로 존재하는 미러를 지정하세요.
+`intro`는 설정 파일 기준의 안내 원고입니다. 생략하면 짧은 기본 안내를 만듭니다. 페이지는 `sections.yaml` 순서를 따르며 추가 MkDocs·시나리오 페이지를 뒤에 연결합니다. `source_url`은 선택 사항이며 해당 커밋이 실제로 존재하는 미러를 지정하세요.
+
+인용 링크의 주소 형식은 코드 열람 호스트에 따라 설정합니다. 기본값은 GitHub/GHE의 `/blob/` 형식이고, Gerrit Gitiles는 `source_link: gitiles`로, 그 밖의 호스트는 템플릿으로 지정합니다. 커밋 40자리 확인과 경로 검증은 형식과 무관하게 적용됩니다.
+
+```yaml
+site:
+  source_url: https://gerrit.example.com/plugins/gitiles/hal-camera
+  source_link: gitiles                                   # github(기본) 또는 gitiles
+  # source_link_template: "{url}/browse/{file}?at={commit}#{line}"   # 다른 호스트 형식
+```
 
 인용 링크는 facts에 기록된 정확한 파일·줄과 40자리 커밋이 일치할 때만 생성합니다. 원고와 facts의 커밋이 다르면 prose 페이지의 새 그림 생성을 거절합니다.
 
@@ -89,18 +105,26 @@ diagrams:
 
 그림을 누르거나 키보드 Enter/Space를 누르면 확대 창이 열립니다. 요소 이름 검색, 실제 SVG 크기 변경, 화면에 맞춤, 100% 복귀를 지원합니다. Escape로 닫으면 원래 그림과 키보드 초점을 복원합니다. `.mmd` 원문도 내려받을 수 있습니다.
 
-Mermaid는 OMM 템플릿과 같은 `11.12.0` 버전에 고정했고 `securityLevel: strict`로 실행합니다. CDN을 읽지 못하면 실패 안내와 원문을 표시합니다. 사내에서는 해당 버전의 전체 ESM 배포 디렉터리와 의존 chunk를 함께 호스팅한 뒤 경로를 지정하세요.
+Mermaid는 OMM 템플릿과 같은 `11.12.0` 버전에 고정했고 `securityLevel: strict`로 실행합니다. 지정한 경로를 읽지 못하면 실패 안내와 원문을 표시합니다.
+
+사내망·오프라인에서는 `sdd fetch-mermaid`로 ESM 배포본(본체와 chunk 모듈)을 준비하고, `site.mermaid_dir`를 지정해 사이트 산출물에 동봉합니다. 그러면 CDN 주소가 페이지에 남지 않고 그림이 사이트 자체 파일로 렌더링됩니다. 망이 분리된 환경에서는 `mermaid-<버전>.tgz`를 먼저 반입한 뒤 `--tarball`로 지정하고, 사내 npm 미러가 있으면 `--registry`를 씁니다.
 
 ```powershell
-uv run sdd --config examples/libcamera/sdd.yaml export-site --mermaid assets/vendor/mermaid/mermaid.esm.min.mjs
+uv run sdd --config <설정>/sdd.yaml fetch-mermaid          # <설정 루트>/assets/mermaid 에 준비
+uv run sdd --config <설정>/sdd.yaml fetch-mermaid --tarball mermaid-11.12.0.tgz   # 반입한 파일 사용
 ```
 
-위 경로는 생성 사이트 루트 기준입니다. 명령은 Mermaid 패키지를 다운로드하지 않으므로 사내 자산 배포 절차에서 파일들을 준비해야 합니다.
+```yaml
+site:
+  mermaid_dir: assets/mermaid    # 설정 루트 기준. export-site 가 사이트의 assets/mermaid/ 로 복사한다
+```
+
+이미 사내 웹 서버에 Mermaid를 호스팅하고 있다면 `site.mermaid` 또는 `--mermaid`로 그 주소(또는 사이트 루트 기준 경로)만 지정해도 됩니다. 우선순위는 `--mermaid` > `site.mermaid` > `site.mermaid_dir` > 공개 CDN입니다.
 
 ## OMM 이력 관리 도입 여부
 
 현재는 Git 원본 이력, facts의 `source_commit`, 문서의 생성 메타데이터, `impact`의 기준·대상 커밋으로 분석 입력과 영향을 추적합니다. OMM의 commit 수집도 Git 이력과 검토 체크포인트를 기반으로 하므로 지금 추가하면 이력 상태를 이중으로 관리하게 됩니다.
 
-따라서 이번에는 디자인 규칙만 적용합니다. 향후 여러 저장소의 설계 의도·제약·검토 승인과 체크포인트를 공통 OMM 항목으로 연결해야 할 때 도입을 다시 판단합니다. 현재 커밋 감시·자동 갱신·검토 승인 파이프라인이 완성되었다는 뜻은 아닙니다.
+따라서 이번에는 디자인 규칙만 적용합니다. 향후 여러 저장소의 설계 의도·제약·검토 승인과 체크포인트를 공통 OMM 항목으로 연결해야 할 때 도입을 다시 판단합니다. 커밋 추적 자동화는 `sdd update`(순서 보장·재개·리뷰 관문), 승인 기록은 `sdd accept` 장부가 담당하며, 두 기능 모두 회귀 테스트로 동작을 확인했고, libcamera·사내 저장소에서의 실측은 남아 있습니다.
 
 다음 단계: 게시 문서의 근거와 문장을 검토합니다.

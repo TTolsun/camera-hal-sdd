@@ -336,3 +336,95 @@ def test_하위_문서는_접었다_펼_수_있다(tmp_cfg, sample_model):
     # 접기는 하위 문서만 감싼다. 같은 그룹의 다른 문서가 안으로 들어가면 안 된다.
     branch = other.split('<details class="nav-branch">')[1].split('</details>')[0]
     assert 'scenarios/open.html' in branch and 'pipe.html' not in branch
+
+
+def test_소스_링크_형식은_호스트_설정을_따른다(tmp_cfg, sample_model):
+    prepare(tmp_cfg, sample_model)
+    tmp_cfg.raw['site']['source_url'] = 'https://gerrit.example.com/plugins/gitiles/hal'
+    tmp_cfg.raw['site']['source_link'] = 'gitiles'
+    out = export_site(tmp_cfg)
+    doc = (out / 'device.html').read_text(encoding='utf-8')
+    assert ('https://gerrit.example.com/plugins/gitiles/hal/+/' + 'a' * 40
+            + '/device/CameraDevice.h#40') in doc
+    assert '/blob/' not in doc
+    # facts 에 없는 인용은 형식과 무관하게 링크하지 않는다.
+    assert '<code>invented.h:99</code>' in doc
+
+
+def test_소스_링크_템플릿을_직접_지정할_수_있다(tmp_cfg, sample_model):
+    prepare(tmp_cfg, sample_model)
+    tmp_cfg.raw['site']['source_link_template'] = '{url}/browse/{file}?at={commit}#{line}'
+    out = export_site(tmp_cfg)
+    doc = (out / 'device.html').read_text(encoding='utf-8')
+    assert ('https://github.com/example/source/browse/device/CameraDevice.h?at='
+            + 'a' * 40 + '#40') in doc
+
+
+def test_잘못된_소스_링크_설정은_즉시_실패한다(tmp_cfg, sample_model):
+    prepare(tmp_cfg, sample_model)
+    tmp_cfg.raw['site']['source_link'] = 'bitbucket'
+    with pytest.raises(RuntimeError, match='source_link'):
+        export_site(tmp_cfg)
+    tmp_cfg.raw['site'].pop('source_link')
+    tmp_cfg.raw['site']['source_link_template'] = '{url}/blob/{branch}/{file}'
+    with pytest.raises(RuntimeError, match='자리표시자'):
+        export_site(tmp_cfg)
+
+
+def test_mermaid_dir_는_사이트에_동봉되고_CDN_주소가_남지_않는다(tmp_cfg, sample_model):
+    prepare(tmp_cfg, sample_model)
+    vendored = tmp_cfg.root / 'assets' / 'mermaid'
+    (vendored / 'chunks' / 'mermaid.esm.min').mkdir(parents=True)
+    (vendored / 'mermaid.esm.min.mjs').write_text('export default {};', encoding='utf-8')
+    (vendored / 'chunks' / 'mermaid.esm.min' / 'chunk-1.mjs').write_text('// chunk', encoding='utf-8')
+    tmp_cfg.raw['site']['mermaid_dir'] = 'assets/mermaid'
+    out = export_site(tmp_cfg)
+    assert (out / 'assets/mermaid/mermaid.esm.min.mjs').is_file()
+    assert (out / 'assets/mermaid/chunks/mermaid.esm.min/chunk-1.mjs').is_file()
+    doc = (out / 'device.html').read_text(encoding='utf-8')
+    assert '"mermaid": "assets/mermaid/mermaid.esm.min.mjs"' in doc
+    assert 'cdn.jsdelivr.net' not in doc
+
+
+def test_mermaid_dir_에_본체가_없으면_실패한다(tmp_cfg, sample_model):
+    prepare(tmp_cfg, sample_model)
+    (tmp_cfg.root / 'assets' / 'mermaid').mkdir(parents=True)
+    tmp_cfg.raw['site']['mermaid_dir'] = 'assets/mermaid'
+    with pytest.raises(RuntimeError, match='fetch-mermaid'):
+        export_site(tmp_cfg)
+
+
+def test_사이트는_승인_상태를_구분해_보여준다(tmp_cfg, sample_model):
+    from sdd import approvals
+    prepare(tmp_cfg, sample_model)
+    ledger = approvals.load(tmp_cfg)
+    approvals.approve_page(ledger, 'device.md',
+                           (tmp_cfg.sdd_dir / 'device.md').read_text(encoding='utf-8'), by='검토자')
+    approvals.save(tmp_cfg, ledger)
+    out = export_site(tmp_cfg)
+    device = (out / 'device.html').read_text(encoding='utf-8')
+    detail = (out / 'nested/detail.html').read_text(encoding='utf-8')
+    index = (out / 'index.html').read_text(encoding='utf-8')
+    assert '사람 검토 승인 · 검토자' in device
+    assert '사람 검토 전' in detail
+    assert '사람 검토 승인 · 검토자' in index and '사람 검토 전' in index
+
+
+def test_require_approval_은_미승인_문서의_게시를_차단한다(tmp_cfg, sample_model):
+    from sdd import approvals
+    prepare(tmp_cfg, sample_model)
+    tmp_cfg.raw['site']['require_approval'] = True
+    with pytest.raises(RuntimeError, match='require_approval'):
+        export_site(tmp_cfg)
+    assert not (tmp_cfg.build_dir / 'site' / 'device.html').exists()
+    ledger = approvals.load(tmp_cfg)
+    for rel in ('device.md', 'nested/detail.md'):
+        approvals.approve_page(ledger, rel, (tmp_cfg.sdd_dir / rel).read_text(encoding='utf-8'), by='검토자')
+    approvals.save(tmp_cfg, ledger)
+    out = export_site(tmp_cfg)
+    assert (out / 'device.html').is_file()
+    # 승인 이후 본문이 바뀌면(stale) 다시 차단한다.
+    page = tmp_cfg.sdd_dir / 'device.md'
+    page.write_text(page.read_text(encoding='utf-8') + '\n추가 문장.\n', encoding='utf-8')
+    with pytest.raises(RuntimeError, match='require_approval'):
+        export_site(tmp_cfg)
