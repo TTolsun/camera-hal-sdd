@@ -53,3 +53,19 @@ review:
   require_citations: true
   # 검증 실패 시 재시도 횟수. 초과하면 status: needs-review 로 기록하고 사람에게 넘긴다.
   max_retries: 1
+
+site:
+  enabled: true
+  title: Camera HAL 설계 문서
+  # 인용을 코드로 연결할 주소와 형식. Gerrit Gitiles 는 gitiles, GitHub/GHE 는 github(기본).
+  # 다른 호스트는 source_link_template 로 지정한다 ({url} {commit} {file} {line}).
+  source_url: https://gerrit.example.com/plugins/gitiles/hal-camera
+  source_link: gitiles
+  # `sdd fetch-mermaid` 가 준비한 Mermaid ESM 사본. 사이트에 동봉되어 CDN 없이 그림을 렌더링한다.
+  mermaid_dir: assets/mermaid
+  # 사람 검토 승인(sdd accept) 없는 문서가 있으면 게시를 중단한다.
+  require_approval: true
+
+update:
+  # `sdd update` 가 커밋마다 compile DB 를 새로 만들 명령 (소스 루트에서 실행). 없으면 기존 DB 를 쓴다.
+  # compdb_cmd: ["ndk-build", "compile_commands.json"]

@@ -96,6 +96,9 @@ def build_site(cfg: Config, out: Path, render, mermaid_src: str | None) -> Path:
             inputs["intro"] = digest(cfg.root / intro)
         if cfg.facts_path.exists():
             inputs["facts"] = digest(cfg.facts_path)
+        from .approvals import ledger_path
+        if ledger_path(cfg).exists():
+            inputs["approvals"] = digest(ledger_path(cfg))
         for p in sorted(cfg.sdd_dir.rglob("*.md")):
             inputs["markdown/" + p.relative_to(cfg.sdd_dir).as_posix()] = digest(p)
         code_root = Path(__file__).parent

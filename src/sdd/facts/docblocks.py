@@ -28,6 +28,10 @@ _BRIEF = re.compile(r"[\\@]brief\s+([^\n]*)")
 # 같은 블록 안에서 멤버를 설명하기 시작하는 태그. 여기부터는 클래스 설명이 아니다.
 _MEMBER_TAG = re.compile(r"[\\@](fn|var|typedef|enum|property|namespace|file)\b")
 _JUNK = re.compile(r"^\s*\*\s?")
+# 파일의 네임스페이스 선언. `using namespace X;` 와 별칭(`namespace a = b;`)은 그 파일이
+# X 나 a 를 설명한다는 뜻이 아니므로 줄 머리의 여는 선언만 읽는다. C++17 의
+# `namespace a::b {` 도 마디를 나눠 담는다.
+_NAMESPACE = re.compile(r"^\s*(?:inline\s+)?namespace\s+([A-Za-z_][\w:]*)\b(?!\s*=)", re.M)
 
 
 def _brief_text(body: str) -> str:
@@ -63,20 +67,47 @@ def blocks(text: str) -> list[tuple[str, str]]:
     return found
 
 
-def resolve(name: str, model: KnowledgeModel, near: str = "") -> str | None:
+def file_namespaces(text: str) -> frozenset[str]:
+    """파일이 선언한 네임스페이스 이름의 마디 집합. `namespace a::b {` 는 {a, b} 로 담는다."""
+    parts: set[str] = set()
+    for name in _NAMESPACE.findall(text):
+        parts.update(p for p in name.split("::") if p)
+    return frozenset(parts)
+
+
+def resolve(name: str, model: KnowledgeModel, near: str = "",
+            namespaces: frozenset[str] = frozenset()) -> str | None:
     """설명 대상 이름을 facts 의 클래스 하나로 정한다. 하나로 정해지지 않으면 None.
 
-    `near` 는 그 블록이 있는 파일의 디렉터리다. 같은 짧은 이름이 여러 네임스페이스에 있을 때
-    (`ipu3::IPAContext` 와 `rkisp1::IPAContext`) 같은 디렉터리에 선언된 클래스를 고른다.
-    구현 파일은 자기 옆에 선언된 것을 설명하기 때문이다. 그래도 하나로 좁혀지지 않으면 비운다.
+    단서를 차례로 적용해 후보를 좁힌다. 단서가 후보를 전부 지우면 그 단서는 쓰지 않는다.
+
+    1. 블록에 적힌 한정 이름 전체를 후보의 꼬리와 대조한다 (`AgcMeanLuminance::Params` 는
+       `ipa::AgcMeanLuminance::Params` 에만 맞는다. 마지막 마디만 보면 중첩 클래스가 겹친다).
+    2. `namespaces` 는 그 블록이 있는 파일이 선언한 네임스페이스다. 구현 파일은 자기
+       네임스페이스의 클래스를 설명하므로, 한정 경로가 파일의 네임스페이스에 담기는 후보를 고른다.
+    3. `near` 는 그 블록이 있는 파일의 디렉터리다. 같은 짧은 이름이 여러 네임스페이스에 있을 때
+       (`ipu3::IPAContext` 와 `rkisp1::IPAContext`) 같은 디렉터리에 선언된 클래스를 고른다.
+
+    그래도 하나로 좁혀지지 않으면 비운다. 잘못 붙이는 것보다 비워 두는 쪽이 안전하다.
     """
     if name in model.classes:
         return name
     tail = name.rsplit("::", 1)[-1]
     candidates = [n for n in model.classes if n.rsplit("::", 1)[-1] == tail]
+    if "::" in name:
+        qualified = [n for n in candidates if n == name or n.endswith("::" + name)]
+        candidates = qualified or candidates
     if len(candidates) == 1:
         return candidates[0]
-    if not candidates or not near:
+    if not candidates:
+        return None
+    if namespaces:
+        inside = [n for n in candidates
+                  if all(part in namespaces for part in n.split("::")[:-1])]
+        if len(inside) == 1:
+            return inside[0]
+        candidates = inside or candidates
+    if not near:
         return None
     same_dir = [n for n in candidates
                 if model.classes[n].loc and str(PurePosixPath(model.classes[n].loc.file).parent) == near]
@@ -105,9 +136,10 @@ def collect(model: KnowledgeModel, cfg: Config, entries: list[dict[str, Any]]) -
         except OSError:
             continue
         stats["files"] += 1
+        namespaces = file_namespaces(text)
         for name, brief in blocks(text):
             stats["blocks"] += 1
-            target = resolve(name, model, near=str(PurePosixPath(rel).parent))
+            target = resolve(name, model, near=str(PurePosixPath(rel).parent), namespaces=namespaces)
             if target is None:
                 tail = name.rsplit("::", 1)[-1]
                 key = "ambiguous" if any(n.rsplit("::", 1)[-1] == tail for n in model.classes) else "unknown"

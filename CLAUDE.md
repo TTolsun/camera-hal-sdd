@@ -25,6 +25,10 @@ uv run pytest tests/test_impact.py::test_이름 -q         # 테스트 하나만
 uv run sdd extract                 # compile DB에서 facts.json 추출
 uv run sdd impact --base <이전-커밋> --base-facts <이전-facts.json> --fail-on-coverage-gap
 uv run sdd generate                # 문서 생성 (--from-impact로 영향 범위만 생성)
+uv run sdd update --to <ref>       # 새 커밋을 차례로 증분 갱신 (관문에서 멈춤, 게시 없음)
+uv run sdd accept                  # 사람 검토 승인 장부 확인·기록 (sdd/approvals.json)
+uv run sdd compdb --normalize      # 빌드 시스템이 만든 compile DB를 libclang용으로 정규화
+uv run sdd fetch-mermaid           # Mermaid ESM 배포본을 사내·오프라인 자산으로 준비
 uv run sdd export-site             # 정적 사이트 생성
 uv run sdd verify-site             # 산출물 해시와 내부 링크 검사
 uv run sdd export-html             # 단일 HTML 생성
