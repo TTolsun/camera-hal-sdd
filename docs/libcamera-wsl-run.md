@@ -18,7 +18,7 @@
 | Linux | Ubuntu 26.04 LTS, WSL2 |
 | libcamera | `279d355ef8f7a4f98bb0a3004c0f788387814506` |
 | 분석 소스 | `/home/baboess/work/libcamera` |
-| Linux 생성기 사본 | `/home/baboess/work/camera-hal-sdd` |
+| Linux 생성기 사본 | `/home/baboess/work/camera-hal-sdd-generator` |
 | 컴파일러 | Clang 21.1.8 |
 | Meson / Ninja | 1.10.1 / 1.13.2 |
 | Python / pip libclang | 3.14.4 / 18.1.1 |
