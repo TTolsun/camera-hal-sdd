@@ -62,7 +62,7 @@ Linux에서 다음과 같이 두 저장소를 나란히 둡니다. Windows의 �
 
 ```text
 ~/work/
-├── camera-hal-sdd/
+├── camera-hal-sdd-generator/
 │   └── examples/libcamera/
 │       ├── sdd.yaml
 │       ├── config/
@@ -86,7 +86,7 @@ Linux에서 다음과 같이 두 저장소를 나란히 둡니다. Windows의 �
      libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
    ```
 
-2. `~/work/camera-hal-sdd`에 이 저장소를 준비한 뒤, libcamera를 받습니다.
+2. `~/work/camera-hal-sdd-generator`에 이 저장소를 준비한 뒤, libcamera를 받습니다.
 
    ```bash
    mkdir -p "$HOME/work"
@@ -97,7 +97,7 @@ Linux에서 다음과 같이 두 저장소를 나란히 둡니다. Windows의 �
 3. 이미 설치한 uv로 문서 생성기 의존성을 설치합니다. uv 설치가 필요하면 [공식 설치 안내](https://docs.astral.sh/uv/getting-started/installation/)를 사용합니다.
 
    ```bash
-   cd "$HOME/work/camera-hal-sdd"
+   cd "$HOME/work/camera-hal-sdd-generator"
    uv sync --frozen --extra dev
    ```
 
@@ -121,7 +121,7 @@ Meson 설정만으로 멈추지 않고 빌드까지 수행하는 이유는 분�
 1. 전용 clone이 깨끗한지 확인하고 경로를 설정합니다.
 
    ```bash
-   export SDD_ROOT="$HOME/work/camera-hal-sdd"
+   export SDD_ROOT="$HOME/work/camera-hal-sdd-generator"
    export LIBCAMERA_ROOT="$HOME/work/libcamera"
    export SDD_CONFIG="$SDD_ROOT/examples/libcamera/sdd.yaml"
    export SDD_PYTHON="$SDD_ROOT/.venv/bin/python"

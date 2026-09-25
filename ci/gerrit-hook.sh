@@ -2,7 +2,7 @@
 # Gerrit patchset-created 훅 또는 Jenkins/GitLab CI job 에서 호출하는 예시.
 #
 # 전제:
-#   - 이 저장소(camera-hal-sdd)와 HAL 소스(hal-camera)가 나란히 checkout 되어 있다.
+#   - 이 저장소(camera-hal-sdd-generator)와 HAL 소스(hal-camera)가 나란히 checkout 되어 있다.
 #   - NDK, clang-uml, uv 가 PATH 에 있고, 사내 LLM 엔드포인트에 도달할 수 있다.
 #   - docs 저장소는 sdd/ 디렉터리를 그대로 담는 별도 Gerrit 프로젝트다 (DOCS_REMOTE).
 #

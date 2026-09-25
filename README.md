@@ -1,4 +1,4 @@
-# camera-hal-sdd
+# camera-hal-sdd-generator
 
 **사내 Camera HAL 소스에서 검토용 설계 문서를 만들고, 코드 변경에 맞춰 유지하기 위한 생성기입니다.** Clang으로 구조와 근거 위치를 추출하고 LLM으로 설명 초안을 작성합니다. 현재는 공개 libcamera로 검증하는 단계이며, 사내 HAL 적용이나 무인 게시가 완료된 상태는 아닙니다.
 
@@ -6,7 +6,7 @@
 
 | 저장소 | 관리 대상 |
 |---|---|
-| `camera-hal-sdd` | 사실 추출, 변경 영향·문서 범위 검사, 설명·Mermaid 생성, 검증과 사이트 구성 |
+| `camera-hal-sdd-generator` | 사실 추출, 변경 영향·문서 범위 검사, 설명·Mermaid 생성, 검증과 사이트 구성 |
 | [libcamera-sdd](https://github.com/TTolsun/libcamera-sdd) | 공개 libcamera 원본 이력의 `upstream/master` 브랜치와 검토용 문서 배포 |
 
 사내 소스와 파생 facts·프롬프트·문서·로그는 공개 테스트 저장소에 올리지 않습니다. 빌드 입력, LLM 엔드포인트와 게시 환경은 프로젝트에 맞게 설정합니다. 세부 기준은 [AGENTS.md](AGENTS.md)를 따릅니다.
