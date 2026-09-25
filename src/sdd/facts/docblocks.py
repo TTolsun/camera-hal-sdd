@@ -28,9 +28,10 @@ _BRIEF = re.compile(r"[\\@]brief\s+([^\n]*)")
 # 같은 블록 안에서 멤버를 설명하기 시작하는 태그. 여기부터는 클래스 설명이 아니다.
 _MEMBER_TAG = re.compile(r"[\\@](fn|var|typedef|enum|property|namespace|file)\b")
 _JUNK = re.compile(r"^\s*\*\s?")
-# 파일의 네임스페이스 선언. `using namespace X;` 는 그 파일이 X 를 설명한다는 뜻이 아니므로
-# 줄 머리의 선언만 읽는다. C++17 의 `namespace a::b {` 도 마디를 나눠 담는다.
-_NAMESPACE = re.compile(r"^\s*(?:inline\s+)?namespace\s+([A-Za-z_][\w:]*)", re.M)
+# 파일의 네임스페이스 선언. `using namespace X;` 와 별칭(`namespace a = b;`)은 그 파일이
+# X 나 a 를 설명한다는 뜻이 아니므로 줄 머리의 여는 선언만 읽는다. C++17 의
+# `namespace a::b {` 도 마디를 나눠 담는다.
+_NAMESPACE = re.compile(r"^\s*(?:inline\s+)?namespace\s+([A-Za-z_][\w:]*)\b(?!\s*=)", re.M)
 
 
 def _brief_text(body: str) -> str:

@@ -67,7 +67,12 @@ def _baseline(cfg: Config, state: dict[str, Any]) -> str:
                        "전체 생성(`sdd run`) 후 다시 실행하세요.")
 
 
-def _needs_review_pages(cfg: Config) -> list[str]:
+def _needs_review_pages(cfg: Config, ledger: dict[str, Any]) -> list[str]:
+    """자동 검사 확인 필요 상태이면서 사람 승인도 없는 페이지. 이 목록이 리뷰 관문을 막는다.
+
+    승인 장부에 기록된(approved) 페이지는 사람이 needs-review 내용을 검토했다는 뜻이므로
+    관문에서 제외한다. 본문이 바뀌면 승인이 stale 이 되어 다시 관문에 걸린다.
+    """
     from .export_html import _split
     pages = []
     for section in cfg.sections():
@@ -75,7 +80,11 @@ def _needs_review_pages(cfg: Config) -> list[str]:
             continue
         rel = section_output(section)
         path = cfg.sdd_dir / rel
-        if path.is_file() and str(_split(path.read_text(encoding="utf-8"))[0].get("status", "")) == "needs-review":
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if (str(_split(text)[0].get("status", "")) == "needs-review"
+                and approvals_mod.page_status(ledger, rel, text) != "approved"):
             pages.append(rel)
     return sorted(set(pages))
 
@@ -144,6 +153,12 @@ def run_update(cfg: Config, to: str = "HEAD", max_count: int | None = None,
     if not state.get("last_done") and not state.get("baseline"):
         state["baseline"] = base
         save_state(cfg, state)
+    if not source_git.is_ancestor(cfg.source_root, base, to):
+        # rebase·force-push 로 기준이 이력에서 사라지면 base..to 가 재작성된 이력 전체를 돌려주고,
+        # 그 diff 는 실제 변경이 아니다. 조용히 재처리하지 않고 사람이 기준을 다시 정하게 한다.
+        raise RuntimeError(f"기준 커밋 {base[:12]} 이 {to} 의 조상이 아닙니다 (rebase 또는 force-push 추정). "
+                           "기준을 다시 정하려면 대상 이력의 커밋에서 extract 를 수행하고 "
+                           f"{state_path(cfg)} 를 삭제한 뒤 실행하세요.")
     queue = source_git.commits_between(cfg.source_root, base, to)
     if max_count is not None:
         queue = queue[:max_count]
@@ -152,6 +167,15 @@ def run_update(cfg: Config, to: str = "HEAD", max_count: int | None = None,
         return result
     log(f"처리할 커밋 {len(queue)} 개 (기준: {base[:12]})")
     ledger = approvals_mod.load(cfg)
+    # 지난 실행이 남긴 needs-review 를 검토 없이 지나치지 못하게, 시작 시점에도 같은 관문을 세운다.
+    pending_review = _needs_review_pages(cfg, ledger)
+    if pending_review:
+        result.stopped_reason = ("검토가 끝나지 않은 needs-review 페이지가 있어 시작하지 않습니다: "
+                                 + ", ".join(pending_review)
+                                 + ". 재생성으로 해소하거나, 검토를 마쳤다면 `sdd accept <문서>` 로 승인을 기록하세요.")
+        result.exit_code = 3
+        log(result.stopped_reason)
+        return result
     # 처리 중에는 소스를 detached 로 체크아웃하므로, 끝나면 원래 브랜치로 되돌린다.
     # 되돌리지 않으면 다음 실행의 기본 대상(HEAD)이 브랜치 끝이 아니라 마지막으로
     # 체크아웃한 커밋을 가리켜, 그 뒤의 커밋을 조용히 놓친다.
@@ -209,6 +233,8 @@ def _process_queue(cfg: Config, queue: list[str], base: str, state: dict[str, An
             state["last_done"] = sha
             state["failed"].pop(sha, None)
             save_state(cfg, state)
+            # 방금 소비한 기준 facts 사본은 더 쓰지 않는다. 남겨 두면 장기 운영에서 커밋 수만큼 쌓인다.
+            kept.unlink(missing_ok=True)
             base = sha
             result.processed.append(sha)
             log(f"== {sha[:12]} 완료")
@@ -219,7 +245,7 @@ def _process_queue(cfg: Config, queue: list[str], base: str, state: dict[str, An
             result.exit_code = 1
             log(result.stopped_reason)
             return result
-        pending_review = _needs_review_pages(cfg)
+        pending_review = _needs_review_pages(cfg, ledger)
         if pending_review:
             result.stopped_reason = (f"{sha[:12]} 생성 결과에 needs-review 페이지가 있습니다: "
                                      + ", ".join(pending_review)

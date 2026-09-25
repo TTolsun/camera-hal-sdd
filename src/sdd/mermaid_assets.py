@@ -72,6 +72,7 @@ def fetch(dest: Path, version: str = DEFAULT_VERSION, registry: str = DEFAULT_RE
     url = tarball_url(version, registry)
     with tempfile.TemporaryDirectory(prefix="mermaid-") as temporary:
         downloaded = Path(temporary) / f"mermaid-{version}.tgz"
-        with urllib.request.urlopen(url) as response, downloaded.open("wb") as f:
+        # timeout 이 없으면 응답이 멈춘 프록시·레지스트리에서 명령이 끝나지 않는다.
+        with urllib.request.urlopen(url, timeout=60) as response, downloaded.open("wb") as f:
             f.write(response.read())
         return extract(downloaded, dest)

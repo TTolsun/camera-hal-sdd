@@ -50,6 +50,19 @@ def test_잘못된_상태는_기록을_거부한다(tmp_cfg):
         approvals.record_finding(ledger, "k", "approved", by="검토자")
 
 
+def test_accept_명령은_경로를_posix_로_정규화해_기록한다(tmp_cfg):
+    from sdd.cli import main
+    (tmp_cfg.sdd_dir / "scenarios").mkdir(parents=True)
+    page = tmp_cfg.sdd_dir / "scenarios" / "flush.md"
+    page.write_text(PAGE, encoding="utf-8")
+    # Windows 식 백슬래시와 ./ 접두사가 섞여도 사이트·이월이 쓰는 키와 같아야 한다.
+    assert main(["--config", str(tmp_cfg.root / "sdd.yaml"), "accept",
+                 ".\\scenarios\\flush.md", "--by", "검토자"]) == 0
+    ledger = approvals.load(tmp_cfg)
+    assert list(ledger["pages"]) == ["scenarios/flush.md"]
+    assert approvals.page_status(ledger, "scenarios/flush.md", PAGE) == "approved"
+
+
 def test_검토_보고서가_장부_키와_상태를_보여준다():
     from sdd.impact import ImpactReport
     from sdd.impact_review import review_markdown

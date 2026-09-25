@@ -63,6 +63,8 @@ def test_장부_승인_후_커밋을_오래된_것부터_차례로_처리한다(
     assert result.exit_code == 0
     assert order == source_repo[1:]                          # 오래된 커밋부터, 건너뛰지 않고
     assert update.load_state(tmp_cfg)["last_done"] == source_repo[-1]
+    # 소비한 기준 facts 사본은 정리해서 장기 운영에서 쌓이지 않게 한다.
+    assert list(tmp_cfg.build_dir.glob("facts-*.json")) == []
     # 재실행은 새 커밋이 없으므로 아무것도 하지 않는다.
     again = update.run_update(tmp_cfg, steps=_steps(order), log=lambda _: None)
     assert again.processed == [] and order == source_repo[1:]
@@ -125,3 +127,22 @@ def test_생성_결과가_needs_review_이면_다음_커밋으로_가지_않는�
     assert result.processed == [source_repo[1]]              # 생성까지 마친 커밋은 완료로 남긴다
     assert update.load_state(tmp_cfg)["last_done"] == source_repo[1]
     assert "needs-review" in result.stopped_reason
+    # 검토 없이 재실행하면 시작 관문이 막는다. 커밋을 더 처리하지 않는다.
+    again = update.run_update(tmp_cfg, steps=steps, log=lambda _: None)
+    assert again.exit_code == 3 and again.processed == []
+    assert update.load_state(tmp_cfg)["last_done"] == source_repo[1]
+    # 사람이 검토하고 승인을 기록하면 관문이 열린다.
+    page = tmp_cfg.sdd_dir / "overview.md"
+    approvals.approve_page(ledger, "overview.md", page.read_text(encoding="utf-8"), by="검토자")
+    approvals.save(tmp_cfg, ledger)
+    # 재생성된 본문이 승인 시점과 같으므로 승인이 유지되어 남은 커밋을 끝까지 처리한다.
+    resumed = update.run_update(tmp_cfg, steps=steps, log=lambda _: None)
+    assert resumed.processed == source_repo[2:]
+    assert update.load_state(tmp_cfg)["last_done"] == source_repo[-1]
+
+
+def test_기준이_이력에서_사라지면_전체_재처리_대신_중단한다(tmp_cfg, source_repo):
+    _seed_baseline(tmp_cfg, source_repo[0])
+    update.save_state(tmp_cfg, {"schema": 1, "last_done": "f" * 40, "failed": {}})
+    with pytest.raises(RuntimeError, match="조상이 아닙니다"):
+        update.run_update(tmp_cfg, steps=_steps([]), log=lambda _: None)

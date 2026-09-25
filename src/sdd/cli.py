@@ -20,7 +20,7 @@ import argparse
 import shutil
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from . import approvals as approvals_mod, compdb, extract, impact as impact_mod
 from .carryover import carry_forward
@@ -178,13 +178,17 @@ def cmd_accept(args: argparse.Namespace) -> int:
                 print(f"- {key}: {entry['state']} ({entry.get('by')} {entry.get('at', '')})")
         print("\n승인: sdd accept <문서.md> [--by 이름], 범위 항목: sdd accept --finding <키> [--defer]")
         return 0
+    from .export_html import _split
     by = _reviewer_name(cfg, args.by)
     for rel in pages:
+        # 장부 키는 사이트·이월과 같은 posix 상대 경로여야 한다. Windows 백슬래시나 ./ 가
+        # 섞인 입력을 그대로 저장하면 승인이 영원히 일치하지 않는다.
+        rel = str(PurePosixPath(rel.replace("\\", "/")))
         path = cfg.sdd_dir / rel
         if not path.is_file():
             raise RuntimeError(f"승인할 문서가 없습니다: {rel} (sdd_dir 기준 상대 경로)")
         text = path.read_text(encoding="utf-8")
-        meta, _ = _split_frontmatter(text)
+        meta, _ = _split(text)
         entry = approvals_mod.approve_page(ledger, rel, text, by,
                                            source_commit=str(meta.get("source_commit", "")),
                                            note=args.note or "")
@@ -199,11 +203,6 @@ def cmd_accept(args: argparse.Namespace) -> int:
             print("  보류는 관문(--fail-on-coverage-gap)을 통과시키지 않습니다. 범위를 정리한 뒤 accepted 로 바꾸세요.")
     approvals_mod.save(cfg, ledger)
     return 0
-
-
-def _split_frontmatter(text: str):
-    from .export_html import _split
-    return _split(text)
 
 
 def cmd_generate(args: argparse.Namespace) -> int:
@@ -308,7 +307,12 @@ def cmd_export_html(args: argparse.Namespace) -> int:
     from .export_html import export
 
     cfg = _cfg(args)
-    mermaid = args.mermaid or str((cfg.raw.get("site") or {}).get("mermaid") or "") or None
+    site = cfg.raw.get("site") or {}
+    mermaid = args.mermaid or str(site.get("mermaid") or "") or None
+    if not mermaid and site.get("mermaid_dir"):
+        # 사이트와 같은 오프라인 구성을 따른다. fetch-mermaid 가 준비한 로컬 사본을 가리키면
+        # CDN 없이도 단일 HTML 의 그림이 렌더링된다 (HTML 을 이 경로에서 읽을 수 있는 환경 기준).
+        mermaid = (cfg.root / str(site["mermaid_dir"]) / "mermaid.esm.min.mjs").as_posix()
     out = export(cfg, out=Path(args.out).resolve() if args.out else None,
                  mkdocs_yml=Path(args.mkdocs).resolve() if args.mkdocs else None,
                  **({"mermaid_src": mermaid} if mermaid else {}), site_name=args.title,

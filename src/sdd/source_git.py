@@ -16,6 +16,13 @@ def commits_between(source_root: Path, base: str, to: str) -> list[str]:
     return [line for line in out.splitlines() if line]
 
 
+def is_ancestor(source_root: Path, base: str, to: str) -> bool:
+    """base 가 to 의 조상인지. base 가 이력에 없으면(rebase·force-push 뒤) False."""
+    res = subprocess.run(["git", "merge-base", "--is-ancestor", base, to],
+                         cwd=source_root, capture_output=True)
+    return res.returncode == 0
+
+
 def is_clean(source_root: Path) -> bool:
     out = subprocess.check_output(["git", "status", "--porcelain"], cwd=source_root, encoding="utf-8")
     return not out.strip()

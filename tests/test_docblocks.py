@@ -100,9 +100,10 @@ def test_파일의_네임스페이스_선언으로_후보를_좁힌다():
                              namespaces=frozenset({"ipa", "agc", "awb"})) is None
 
 
-def test_using_namespace_는_선언으로_치지_않는다():
+def test_using_namespace_와_별칭은_선언으로_치지_않는다():
     text = NL.join([
         "using namespace foreign;",
+        "namespace alias_name = libcamera::ipa::agc;",
         "namespace ipa::agc {",
         "inline namespace v1 {",
         "} }",
