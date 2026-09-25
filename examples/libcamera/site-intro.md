@@ -31,6 +31,6 @@
 
 분석 기준은 libcamera 커밋 `279d355ef8f7a4f98bb0a3004c0f788387814506`입니다. WSL2에서 IPU3·RKISP1·UVC와 GStreamer를 포함해 빌드했고, 문장은 Windows의 로컬 Ollama로 생성했습니다. 호출 순서는 libclang으로 추적했으며 진입 함수 5개를 모두 찾았습니다. 실기기 촬영과 실행 검증은 후속 작업입니다.
 
-[camera-hal-sdd](https://github.com/TTolsun/camera-hal-sdd)는 분석·생성·검증·화면 구성 기술을 관리합니다. [libcamera-sdd](https://github.com/TTolsun/libcamera-sdd)는 원본 소스 이력과 완성 문서의 배포를 담당합니다. 자동 갱신 작업은 아직 연결하지 않았습니다.
+[camera-hal-sdd-generator](https://github.com/TTolsun/camera-hal-sdd-generator)는 분석·생성·검증·화면 구성 기술을 관리합니다. [libcamera-sdd](https://github.com/TTolsun/libcamera-sdd)는 원본 소스 이력과 완성 문서의 배포를 담당합니다. 자동 갱신 작업은 아직 연결하지 않았습니다.
 
 원래 라이브러리의 사용법은 [libcamera 공식 문서](https://docs.libcamera.org/master/)에서 확인할 수 있습니다.

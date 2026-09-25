@@ -1,4 +1,4 @@
-# camera-hal-sdd 파이프라인 설정.
+# camera-hal-sdd-generator 파이프라인 설정.
 # 상대 경로는 이 파일이 있는 디렉터리를 기준으로 해석한다.
 # 로컬에서만 다른 값을 쓰려면 sdd.local.yaml 에 같은 구조로 덮어쓴다 (git 제외).
 

@@ -1,5 +1,5 @@
 [project]
-name = "camera-hal-sdd"
+name = "camera-hal-sdd-generator"
 version = "0.1.0"
 description = "Camera HAL SDD 자동 생성 파이프라인: Clang 기반 사실 추출 + 사내 LLM(Hermes/Qwen) 서술 + Gerrit 리뷰"
 requires-python = ">=3.11"

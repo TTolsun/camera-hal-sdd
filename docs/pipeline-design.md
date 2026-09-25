@@ -1,4 +1,4 @@
-# camera-hal-sdd 파이프라인 설계
+# camera-hal-sdd-generator 파이프라인 설계
 
 이 문서는 SDD 가 아니라, SDD 를 만드는 파이프라인 자체의 설계 기록입니다. 왜 이렇게 결정했는지를 남기는 것이 목적입니다.
 

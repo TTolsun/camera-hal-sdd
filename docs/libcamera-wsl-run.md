@@ -76,7 +76,7 @@ WSL의 `localhost:11434`에서는 Windows Ollama에 연결되지 않았습니다
 
 ## 전용 GitHub 저장소 구성
 
-문서를 만드는 기술은 `camera-hal-sdd`에서 관리합니다. Clang 분석, 영향 분석, LLM 호출, 인용 검증과 libcamera용 설정·보정 스크립트가 여기에 속합니다. `libcamera-sdd`는 upstream 이력 보관과 생성 결과의 검토·배포를 담당하며 생성 엔진을 복제하지 않습니다.
+문서를 만드는 기술은 `camera-hal-sdd-generator`에서 관리합니다. Clang 분석, 영향 분석, LLM 호출, 인용 검증과 libcamera용 설정·보정 스크립트가 여기에 속합니다. `libcamera-sdd`는 upstream 이력 보관과 생성 결과의 검토·배포를 담당하며 생성 엔진을 복제하지 않습니다.
 
 | 위치 | 역할 |
 |---|---|
