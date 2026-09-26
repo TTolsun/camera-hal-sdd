@@ -102,7 +102,10 @@ def build_site(cfg: Config, out: Path, render, mermaid_src: str | None) -> Path:
         for p in sorted(cfg.sdd_dir.rglob("*.md")):
             inputs["markdown/" + p.relative_to(cfg.sdd_dir).as_posix()] = digest(p)
         code_root = Path(__file__).parent
-        engine = {p.name: digest(p) for p in [code_root / "diagrams.py", code_root / "export_site.py", Path(__file__)]}
+        engine = {p.name: digest(p) for p in [code_root / "diagrams.py", code_root / "export_site.py",
+                                            code_root / "document_metadata.py", code_root / "scenario_document.py",
+                                            code_root / "design_contracts.py", code_root / "evidence.py",
+                                            Path(__file__)]}
         from .diagrams import POLICY_VERSION
         data = {"schema": 1, "diagram_policy": POLICY_VERSION, "inputs": inputs, "engine": engine,
                 "dependencies": {name: version(name) for name in ("Markdown", "pymdown-extensions", "PyYAML")},

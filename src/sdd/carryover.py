@@ -53,8 +53,9 @@ def carry_forward(cfg: Config, model: KnowledgeModel,
         if not m:
             continue
         meta = _meta(m.group(1))
-        # 생성 페이지의 표식은 source_commit + agent 다. 수동 문서는 사람이 재검토한다.
-        if meta.get("kind") == "manual" or "source_commit" not in meta or "agent" not in meta:
+        # New pages record their generation method; legacy pages have an agent.
+        if (meta.get("kind") == "manual" or meta.get("generation_method") == "manual"
+                or "source_commit" not in meta or not ("agent" in meta or "generation_method" in meta)):
             continue
         old_commit = meta.get("source_commit", "")
         if old_commit == new_commit:
@@ -63,6 +64,16 @@ def carry_forward(cfg: Config, model: KnowledgeModel,
         body = text[m.end():]
         invalid = sorted({c for c in extract_citations(body) if c not in allowed})
         sec = sections.get(meta.get("section", ""), {})
+        if sec.get("design_requirements"):
+            from .design_contracts import audit
+            invalid.extend(audit(model, sec)["findings"])
+        if meta.get("scenario_fingerprint"):
+            from .scenario_document import fingerprint as scenario_fingerprint
+            sid = meta.get("scenario_id", "")
+            settings = next((s for s in cfg.scenarios() if s["id"] == sid), {})
+            sc = model.scenarios.get(sid)
+            if sc is None or meta["scenario_fingerprint"] != scenario_fingerprint(sc, settings):
+                invalid.append("시나리오 호출 근거 또는 표시 설정이 변경됐습니다.")
         if (requires_fingerprint(sec) or meta.get("evidence_fingerprint")) and meta.get("evidence_fingerprint") != fingerprint(model, sec):
             invalid.append("설계 질문·구조·소스 근거가 변경됐거나 이전 지문이 없습니다.")
         if invalid:

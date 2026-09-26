@@ -9,7 +9,25 @@ from .config import Config
 from .matching import matches_symbol
 from .facts.model import KnowledgeModel
 
-POLICY_VERSION = 1
+POLICY_VERSION = 2
+
+
+def scenario_call_map(messages: list, limit: int = 16) -> str:
+    """A call relationship map avoids ordering unrelated dynamic candidates."""
+    names = sorted({n for m in messages for n in (m.src, m.dst)})
+    if limit < 1 or len(names) > limit:
+        raise RuntimeError(f"Scenario diagram has {len(names)} nodes (limit {limit}); "
+                           "narrow scenarios.focus or increase diagrams.max_nodes")
+    ids = {name: f"p{i}" for i, name in enumerate(names)}
+    rows = ["flowchart LR"]
+    for name, ident in ids.items():
+        rows.append(f'  {ident}["{html.escape(name, quote=True)}"]')
+    edges = dict.fromkeys((m.src, m.dst, m.name, m.note) for m in messages)
+    for source, target, name, note in edges:
+        label = html.escape(f"{name}()" + (f" · {note}" if note else ""), quote=True)
+        arrow = "-.->" if note else "-->"
+        rows.append(f'  {ids[source]} {arrow}|"{label}"| {ids[target]}')
+    return "\n".join(rows)
 
 def class_diagram(model: KnowledgeModel, patterns: list[str], limit: int = 16, direction: str = "LR", strip_namespace: str = "") -> str:
     """Only declared classes and extracted edges; no inferred call ordering."""

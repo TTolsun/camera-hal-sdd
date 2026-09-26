@@ -39,6 +39,27 @@ def test_slugify_keeps_korean_like_pymdownx():
     assert slugify("코드를 처음 읽는 순서") == "코드를-처음-읽는-순서"
 
 
+def test_incremental_facts_generation_does_not_call_model_for_summary(tmp_cfg, sample_model, monkeypatch):
+    import argparse
+    import yaml
+    from sdd import cli
+    from sdd.impact import ImpactReport
+
+    section = dict(id='structure', title='구조', narration='facts', facts={'classes': ['CameraDevice']})
+    tmp_cfg.sections_file.write_text(yaml.safe_dump({'sections': [section]}), encoding='utf-8')
+    tmp_cfg.agent.kind = 'ollama'
+    sample_model.save(tmp_cfg.facts_path)
+    report = ImpactReport(base='old', head='abc123', sections={'structure': ['changed']})
+    report.save(tmp_cfg.build_dir / 'impact.json')
+    monkeypatch.setattr(cli, '_cfg', lambda args: tmp_cfg)
+    def no_calls(*args, **kwargs):
+        raise AssertionError('Facts-only incremental generation must not call an LLM')
+    monkeypatch.setattr(cli.Agent, 'chat', no_calls)
+    assert cli.cmd_generate(argparse.Namespace(from_impact=True, sections=None)) == 0
+    assert 'generation_method: extracted-structure' in (tmp_cfg.sdd_dir / 'structure.md').read_text(encoding='utf-8')
+    assert 'old..abc123' in (tmp_cfg.build_dir / 'change_impact.md').read_text(encoding='utf-8')
+
+
 def test_system_prompt_includes_style_readme_only_by_default(tmp_cfg):
     system = compose_system_prompt(tmp_cfg)
     assert "개발자 가이드 집필 규칙:" in system and "1. 각 페이지는 독자가 먼저 할 일이나" in system
@@ -81,8 +102,10 @@ def test_dry_run_generates_all_pages_with_frame(tmp_cfg, sample_model):
 
     scen = (tmp_cfg.sdd_dir / "scenarios/process_capture_request.md").read_text(encoding="utf-8")
     assert "```mermaid" in scen
-    assert "1. `CameraDevice` 가 `FrameFactory::createFrame()` 를 호출합니다. `device/CameraDevice.cpp:305`" in scen
-    assert "status: needs-review" in scen   # dry-run 출력은 사람이 봐야 한다
+    assert "| 1 | `CameraDevice` | `FrameFactory::createFrame()` | 정적 호출 지점입니다. | `device/CameraDevice.cpp:305` |" in scen
+    assert "## 전체 추적 기록" in scen
+    assert "status: ok" in scen  # Static scenarios do not depend on the dry-run agent.
+    assert "generation_method: extracted-scenario" in scen
     assert "다음 단계: [핵심 시나리오 목록](index.md)" in scen   # scenarios/ 안에서는 index.md 가 같은 디렉터리
 
     index = (tmp_cfg.sdd_dir / "scenarios/index.md").read_text(encoding="utf-8")
@@ -290,8 +313,10 @@ def test_hide_규칙은_표시만_줄이고_뺀_개수를_적는다(tmp_cfg, sam
     gen._per_scenario(sec, None)
     page = (tmp_cfg.sdd_dir / "scenarios" / "a_first.md").read_text(encoding="utf-8")
     assert "`RequestManager::submit()`" in page
-    assert "trace()" not in page and "_d()" not in page
-    assert "표시에서 뺀 호출이 2 개 있습니다." in page
+    overview = page.split("## 주요 확인 지점")[1].split("## 추적 범위와 경계")[0]
+    assert "trace()" not in overview and "_d()" not in overview
+    assert "요약의 hide 규칙에 해당하는 호출은 2개입니다." in page
+    assert "Log::trace()" in page and "FrameFactory::_d()" in page
     # 사실은 그대로 남는다.
     assert len(model.scenarios["a_first"].messages) == 3
 

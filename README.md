@@ -15,10 +15,10 @@
 
 | 작업 | 현재 동작 |
 |---|---|
-| 소스 분석 | compile DB로 클래스·함수·근거 위치·일부 관계와 호출 흐름을 추출합니다. |
+| 소스 분석 | compile DB로 클래스·함수·근거 위치·일부 관계와 호출 흐름을 추출합니다. 빈 DB, 파싱 오류와 libclang 시나리오 진입점 누락은 기존 facts를 보존하고 추출을 중단합니다. |
 | 변경 검사 | Git diff로 재생성할 섹션을 고르고, 문서 선택 범위에서 빠진 클래스·함수를 검토 대상으로 표시합니다. |
-| 문서 생성 | 사실 기반 표·Mermaid와 LLM 설명을 Markdown으로 만듭니다. 자동 클래스 그림은 명시적으로 활성화합니다. |
-| 자동 검사 | 인용 위치와 문장 형태를 검사합니다. 설정에 따라 입력 근거·일부 구조 주장·설계 계약의 근거 해시도 검사합니다. 일반적인 문장 의미의 정확성이나 사람의 승인을 보장하지 않습니다. |
+| 문서 생성 | 사실 기반 표·Mermaid와 LLM 설명을 Markdown으로 만듭니다. 시나리오는 기본적으로 facts에서 주요 호출·경계·전체 기록을 구성하며, `focus`로 요약 대상을 선택합니다. 자동 클래스 그림은 명시적으로 활성화합니다. |
+| 자동 검사 | 인용 위치와 문장 형태를 검사합니다. 설정에 따라 입력 근거·일부 구조 주장·설계 계약의 근거 해시도 검사합니다. 필수 설계 질문에 답변과 근거가 없으면 생성·사이트 빌드를 중단합니다. 일반적인 문장 의미의 정확성이나 사람의 승인을 보장하지 않습니다. |
 | 사이트 구성 | 탐색·목차·검색·그림 확대를 제공하고 내부 링크와 산출물 해시를 검사합니다. 소스 링크 형식(GitHub·Gitiles·템플릿)과 Mermaid 동봉(`fetch-mermaid`)을 설정할 수 있습니다. |
 | 증분 자동 갱신 | `sdd update`가 새 커밋을 오래된 것부터 차례로 추출·영향 분석·생성하고, 실패 시 같은 커밋부터 재개합니다. 미승인 범위 항목과 `needs-review` 관문에서 멈춥니다. |
 | 사람 승인 | `sdd accept`가 원고와 범위 검토 항목의 승인을 장부(`sdd/approvals.json`)에 기록합니다. `site.require_approval`로 미승인 문서의 게시를 차단할 수 있습니다. |
@@ -46,6 +46,7 @@ agent:
 
 - 작은 HAL 예제: [examples/mini-hal](examples/mini-hal/)과 [기존 결과 스냅샷](examples/mini-hal/expected-output/)
 - 사내 Camera HAL: [적용 절차와 준비 항목](docs/inhouse-adoption.md) (사내 환경에서 실행되지 않은 절차입니다)
+- 사내 Claude에 구축 맡기기: [복사용 지시문과 구축·완료 기준](docs/inhouse-agent-bootstrap.md)
 - 공개 libcamera: [환경 준비와 실행](docs/libcamera-home-lab.md), [실제 WSL 실행 기록](docs/libcamera-wsl-run.md)
 - 게시 결과: [검토용 사이트](https://ttolsun.github.io/libcamera-sdd/), [카메라 모델 문서의 충분성 평가](docs/camera-model-review.md)
 
@@ -96,6 +97,6 @@ CI는 Windows/Ubuntu와 Python 3.11/3.14에서 회귀 테스트를 실행합니�
 
 실제 libcamera 두 커밋에서는 빌드·구조 추출·Mermaid 갱신을 확인했고, 문서 범위 누락과 LLM 설명 오류도 발견했습니다. 새 범위 검사는 LSC 누락을 검출합니다. [A/B 검증 기록](docs/libcamera-revision-validation.md)을 성공 범위와 함께 확인하세요.
 
-설명에는 선택적으로 문단별 입력 인용·한정 이름·일부 상속과 필드 참조 검사를 적용합니다. libcamera의 요청·버퍼·종료·동시성 등 여섯 설계 주제는 검토한 소스 발췌와 해시에 연결해 반복 생성하며, 근거가 바뀌면 재검토 대상으로 남깁니다. 검사 대상 원고의 이월도 구조·소스 근거 지문을 확인합니다. [설계 근거와 검증 범위](docs/design-evidence.md)를 참고하세요.
+설명에는 선택적으로 문단별 입력 인용·한정 이름·일부 상속과 필드 참조 검사를 적용합니다. libcamera 예제의 개요·카메라·Pipeline·IPA·LSC 처리 문서는 필수 질문 26개를 소스 발췌에 연결합니다. 근거 변경이나 답변 누락은 생성·사이트 빌드를 중단하며, 원문은 문서에서 펼쳐 볼 수 있습니다. 질문과 설명은 프로젝트별 설정으로 작성해야 하며 해시 일치는 의미의 정확성을 승인하지 않습니다. [설계 근거와 검증 범위](docs/design-evidence.md)를 참고하세요.
 
 남은 과제는 일반적인 설명 의미 검증, 사내 LLM 엔드포인트에서의 생성 모델 비교와 사내 HAL에서의 실제 검증입니다. 가상 호출·스레드·수명 관계는 정적 추출만으로 완전하게 설명할 수 없으며 코드 검토와 실행 근거가 필요합니다. 저장소는 MIT 라이선스로 배포합니다(외부 의존: libclang Apache-2.0(LLVM 예외), clang-uml Apache-2.0, Mermaid·PyYAML·pymdown-extensions·mkdocs-material MIT, Markdown BSD-3-Clause).

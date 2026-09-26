@@ -32,6 +32,8 @@ def run(cfg: Config, skip_comments: bool = False, skip_clang_uml: bool = False,
         only_diagrams: list[str] | None = None) -> KnowledgeModel:
     compdb_path = compdb.ensure(cfg)
     entries = compdb.load_entries(compdb_path)
+    if not entries:
+        raise RuntimeError("compile DB가 비어 있습니다. 실제 빌드 구성을 확인한 뒤 다시 추출하세요.")
     for w in compdb.check(entries):
         print(f"[compdb] 경고: {w}")
 
@@ -56,8 +58,12 @@ def run(cfg: Config, skip_comments: bool = False, skip_clang_uml: bool = False,
     # 주석과 선언/정의 위치는 항상 libclang 이 채운다. clang-uml 이 없을 때는 클래스 목록 자체도 여기서 나온다.
     if not skip_comments or backend == "libclang":
         stats = comments.collect(model, cfg, entries)
+        model.meta["comments"] = stats
         print(f"[comments] TU {stats['tus']} 개, 파싱 오류 {stats['errors']} 개, "
               f"클래스 {stats['classes']}, 메서드 {stats['methods']}, 함수 {stats['functions']}")
+        if stats["errors"]:
+            raise RuntimeError(f"Clang 파싱 오류 {stats['errors']}개로 추출을 중단합니다. "
+                               "compile DB의 include 경로, 매크로와 생성 헤더를 확인하세요. 기존 facts는 보존합니다.")
 
     # 선언에 붙지 않은 문서 주석은 libclang 이 어디에도 주지 않는다. 클래스 설명이 구현 파일에
     # 따로 적혀 있는 코드베이스에서는 이 단계가 없으면 설명이 통째로 빠진다.
@@ -70,6 +76,9 @@ def run(cfg: Config, skip_comments: bool = False, skip_clang_uml: bool = False,
         stats = callgraph.collect(model, cfg, entries)
         print(f"[callgraph] clang-uml 없이 libclang 으로 추적: 함수 정의 {stats['functions']} 개, "
               f"시나리오 {stats['scenarios']} 개, 진입점 못 찾음 {stats['missing_entries']} 개")
+        if stats["missing_entries"]:
+            raise RuntimeError(f"시나리오 진입점 {stats['missing_entries']}개를 찾지 못했습니다. "
+                               "scenarios.yaml을 실제 정의와 대조하세요. 기존 facts는 보존합니다.")
 
     flags.collect(model, cfg, entries)
     from .evidence import collect as collect_evidence
