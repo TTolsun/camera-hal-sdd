@@ -39,6 +39,17 @@ uv run sdd --config examples/libcamera/sdd.yaml verify-site
 
 Git push는 생성 명령에 포함하지 않습니다. 검증된 출력 디렉터리를 `libcamera-sdd/docs`로 지정해 만들고 해당 저장소에서 커밋·push하면 기존 Pages가 게시합니다. 생성기 CI는 push/PR마다 Windows·Linux, Python 3.11·3.14에서 회귀 검사를 실행하도록 구성했습니다. 원격 CI 통과 여부는 실제 실행 결과로 확인해야 합니다.
 
+## 공개 libcamera SDD 동반 배포
+
+사용자는 이 프로젝트의 변경 작업마다 공개 libcamera SDD도 함께 갱신하도록 상시 지시했습니다. 아래 절차는 에이전트의 작업 완료 기준이며, 필요한 공개 배포를 다시 요청받을 때까지 미루지 않습니다. 명시적으로 배포를 보류하라는 후속 지시가 있으면 그 지시를 따릅니다.
+
+1. 생성기 변경을 리뷰하고 필요한 테스트와 CI를 확인한 뒤 PR을 main에 병합합니다.
+2. 공개 libcamera의 분석 기준 커밋과 사용한 생성기 커밋을 고정합니다. 추출 동작이 바뀌면 facts를 다시 추출하고, 원고 내용·근거·집필 규칙이 바뀌면 원고도 재생성합니다. CSS 등 표시만 바뀌면 기존 원고를 검증하여 사이트를 다시 빌드할 수 있습니다. facts를 재사용한 경우에는 재추출했다고 기록하지 않습니다.
+3. `TTolsun/libcamera-sdd`의 기존 변경사항과 지침을 확인합니다. 분석용 체크아웃을 보존하고 배포 작업본의 `docs/`에 생성기로 출력합니다. HTML과 배포용 CSS를 직접 수정하지 않습니다. CSS 원본은 `src/sdd/site_assets/reading.css`이며 `docs/assets/reading.css`는 그 복사본입니다.
+4. 내부 링크·manifest 해시·반복 빌드를 검사합니다. 화면 변경은 데스크톱·모바일에서 확인하고, README·사이트 안내·`run.json`의 생성기 커밋과 검증 범위를 실제 결과에 맞춥니다. 공개 입력과 산출물만 포함하며 사람의 내용 승인 상태를 자동으로 바꾸지 않습니다.
+5. 문서 저장소에 PR을 만들고 검증 후 main에 병합합니다. GitHub Pages 배포가 성공할 때까지 확인한 뒤, [공개 사이트](https://ttolsun.github.io/libcamera-sdd/)의 manifest와 HTML·CSS 해시를 해당 생성 결과와 대조합니다. 저장소와 Pages 설정은 배포 시점의 실제 구성을 확인합니다.
+6. 완료 보고에는 생성기와 문서 저장소의 PR, 공개 URL과 배포 확인 결과를 남깁니다. 지침·테스트만 바뀌어 공개 산출물에 차이가 없으면 불필요한 배포 커밋을 만들지 않고 그 결과를 알립니다. 실패하거나 권한이 부족하면 원인과 미완료 단계를 명시하고 기존 공개 사이트를 보존합니다.
+
 ## 디자인 기준
 
 [libcamera 공식 문서](https://docs.libcamera.org/master/)의 좌측 탐색 메뉴·중앙 본문·우측 목차를 참고했습니다. OMM 저장소의 `DESIGN.md`, `docs/design.md`, `assets/reading.css`, `templates/jekyll/_layouts/default.html`에서 읽기 중심 배치와 다이어그램 상호작용 규칙을 적용했습니다. 참고한 로컬 OMM 기준 커밋은 `12a704c603136308b87b26c4081bd6102d42395e`입니다.
