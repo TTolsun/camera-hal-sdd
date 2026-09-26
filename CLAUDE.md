@@ -10,6 +10,10 @@ Camera HAL 소스에서 검토용 설계 문서(SDD)를 생성하고, 코드 변
 
 @AGENTS.md
 
+## 변경 작업의 완료 기준
+
+사용자의 상시 지시에 따라 생성기 작업과 공개 libcamera SDD 갱신을 함께 완료합니다. 생성기 리뷰·검증·병합 후 공개 입력으로 문서와 사이트를 갱신하고, `TTolsun/libcamera-sdd`의 PR 병합·Pages 배포·공개 URL 반영까지 확인합니다. 자세한 절차와 산출물 변경이 없는 경우의 처리는 [공개 libcamera SDD 동반 배포](docs/document-site.md#공개-libcamera-sdd-동반-배포)를 따릅니다. 사내 소스와 파생물은 공개 저장소에 배포하지 않습니다.
+
 ## 사내 문서 자동화 구축 요청을 받았을 때
 
 [사내 Claude 구축 가이드](docs/inhouse-agent-bootstrap.md)를 읽고 실제 HAL 한 경로의 추출·설계 문서·변경 반영 검증부터 진행합니다. 가이드에는 초기 입력, 프로젝트 설정 작성, 사내 CI 연결, 완료 기준과 인계할 결과가 있습니다. 사내 정보가 없을 때 공개 libcamera 결과만으로 사내 적용 완료를 선언하지 않습니다.
