@@ -65,7 +65,7 @@ def generate_simple(cfg: Config) -> Path:
         flags.append(tok)
     entries = []
     for src in sorted(root.rglob("*")):
-        if src.suffix.lower() not in (".cpp", ".cc", ".c") or any(p in ("build", "obj", "libs") for p in src.parts):
+        if src.suffix.lower() not in (".cpp", ".cc", ".c") or any(p in ("build", "obj", "libs") for p in src.relative_to(root).parts):
             continue
         entries.append({
             "directory": root.as_posix(),

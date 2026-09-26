@@ -21,7 +21,10 @@ from typing import Any
 
 from .budget import Block, fit
 from .config import Config, section_output
-from .diagrams import diagram_block, section_diagram, sequence_diagram
+from .diagrams import diagram_block, section_diagram
+from .document_metadata import generation_info, generation_method
+from .design_contracts import audit as audit_design, coverage_table, source_details
+from .scenario_document import build as scenario_document, hidden_message, fingerprint as scenario_fingerprint
 from .facts.model import ClassInfo, KnowledgeModel
 from .impact import ImpactReport
 from .matching import is_anonymous, matches_symbol
@@ -33,10 +36,7 @@ from .semantic import known_names, normalize_symbols, relation_facts, structural
 
 _FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
 _YAML_FRONTMATTER = re.compile(r"^---\n.*?\n---\n", re.S)
-_MAX_STEPS = 30
 _MAX_READING = 6
-# 시퀀스 그림에 그리는 메시지 수. 넘으면 자르고 자른 개수를 문서에 적는다.
-_MAX_SEQUENCE = 40
 # 개요의 의존 표에 싣는 방향 수. 넘으면 관계가 많은 순으로 자르고 자른 개수를 문서에 적는다.
 _MAX_DEPS = 20
 
@@ -95,6 +95,18 @@ class Generator:
 
     def run(self, section_ids: list[str] | None = None, impact: ImpactReport | None = None) -> list[Path]:
         written: list[Path] = []
+        # Validate every selected contract before replacing any manuscript.
+        reports = {s['id']: audit_design(self.model, s) for s in self.cfg.sections()
+                   if s.get('design_requirements') and (not section_ids or s['id'] in section_ids)
+                   and (not impact or s['id'] in impact.sections)}
+        if reports:
+            self.cfg.build_dir.mkdir(parents=True, exist_ok=True)
+            (self.cfg.build_dir / 'design-review.json').write_text(json.dumps(
+                {'source_commit': self.model.meta.get('source_commit'), 'sections': reports},
+                ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+            problems = [f"{sid}: {note}" for sid, report in reports.items() for note in report['findings']]
+            if problems:
+                raise ValueError('설계 항목 검증 실패:\n' + '\n'.join(problems))
         for sec in self.cfg.sections():
             kind = sec.get("kind", "prose")
             if section_ids and sec["id"] not in section_ids:
@@ -178,12 +190,15 @@ class Generator:
                     self._record_review(tag, text, current, missing, mode="source-bound-contract")
                 else:
                     text, missing, current = self._ask(tag, topic_sec, topic["title"], evidence, "")
-                parts.append(f"## {topic['title']}\n\n{text}")
+                detail = source_details(self.model, sec['id'], topic) if sec.get('show_evidence') and current.ok else ''
+                parts.append(f"## {topic['title']}\n\n{text}" + (f"\n\n{detail}" if detail else ''))
                 blocks += evidence
                 omitted += missing
                 if not current.ok:
                     verdict.ok = False
                     verdict.notes += current.notes
+            if sec.get('design_requirements'):
+                parts.insert(0, coverage_table(self.model, sec))
             prose = "\n\n".join(parts)
         elif sec.get("narration") == "facts":
             selected = {c.name for c in self._sorted_classes() if _match_class(c, sec)}
@@ -254,12 +269,18 @@ class Generator:
                                    routes=routes or None)
 
     def _per_scenario(self, sec: dict[str, Any], impact: ImpactReport | None) -> list[Path]:
+        narration = sec.get("narration", "facts")
+        if narration not in ("facts", "llm"):
+            raise ValueError("시나리오 narration은 facts 또는 llm이어야 합니다.")
         out: list[Path] = []
         ordered = self._ordered_scenarios()
-        rows = ["| 시나리오 | 진입점 | 단계 수 | 표시에서 뺀 호출 | 예약된 호출 | 미해결 호출 |",
+        rows = ["| 시나리오 | 진입점 | 요약 대상 호출 | 요약에서 뺀 호출 | 예약된 호출 | 미해결 호출 |",
                 "|---|---|---|---|---|---|"]
         routes: list[tuple[str, str]] = []
         shown_by_id: dict[str, tuple[list[Any], int]] = {}
+        policy = {**(self.cfg.raw.get("diagrams") or {}), **(sec.get("diagram") or {})}
+        documents = {sid: scenario_document(sc, self.scenario_cfg.get(sid, {}), int(policy.get("max_nodes", 16)))
+                     for sid, sc in ordered if not impact or sid in impact.scenarios}
         for sid, sc in ordered:
             shown, hidden = self._visible_messages(sc)
             shown_by_id[sid] = (shown, hidden)
@@ -271,37 +292,34 @@ class Generator:
         for idx, (sid, sc) in enumerate(ordered):
             if impact and sid not in impact.scenarios:
                 continue
-            shown, hidden = shown_by_id[sid]
-            steps = _steps(shown, hidden)
-            blocks = [Block("steps", f"### 시나리오 {sc.title}\n- 진입점: {sc.entry}\n{steps}", 0)]
-            text, omitted, verdict = self._ask(f"scenario_{sid}", sec, sc.title, blocks, "")
-            # 그림도 표시에서 뺀 목록으로 다시 그린다. facts 의 mermaid 는 전체 메시지로 만든 것이어서
-            # 호출 순서 목록과 내용이 어긋난다.
-            drawn = shown[:_MAX_SEQUENCE]
-            diagram = sequence_diagram(sc.participants[0] if sc.participants else sc.entry, drawn)
-            mermaid = f"```mermaid\n{diagram}\n```"
-            if len(shown) > _MAX_SEQUENCE:
-                mermaid += (f"\n\n그림에는 앞의 {_MAX_SEQUENCE} 개 호출만 그렸습니다. 나머지 {len(shown) - _MAX_SEQUENCE} 개는"
-                            " 아래 호출 순서와 `facts.json` 에서 확인하세요.")
-            body_parts = [p for p in (mermaid, f"## 호출 순서\n\n{steps}", f"## 이 흐름에서 확인할 것\n\n{text}") if p]
-            if sc.deferred:
-                body_parts.append(
-                    f"확인 필요: 메서드를 인자로 넘겨 예약한 호출이 {sc.deferred} 개 있습니다. 위에서 `예약된 호출, 실행 순서는"
-                    " 정적으로 확인 불가` 로 표시한 단계가 그 자리입니다. 대상 메서드는 확인했지만, 실제 실행 시점과 스레드는"
-                    " 큐나 신호 구현이 정하므로 이 번호 목록은 그 지점 이후의 순서를 보장하지 않습니다. 이후 흐름은 예약을 받는"
-                    " 쪽의 구현에서 직접 확인해야 합니다.")
-            if sc.unresolved:
-                body_parts.append(f"확인 필요: 가상 함수나 함수 포인터 때문에 정적으로 끊긴 호출이 {sc.unresolved} 개 있습니다. "
-                                  "끊긴 지점 이후는 코드를 직접 따라가야 합니다.")
+            doc = documents[sid]
+            blocks = [Block("steps", f"### 시나리오 {sc.title}\n- 진입점: {sc.entry}\n{doc.prompt}", 0)]
+            if narration == "llm":
+                # Paragraph-level evidence checks are required for optional prose.
+                text, omitted, verdict = self._ask(f"scenario_{sid}", {**sec, "semantic_review": True}, sc.title, blocks, "")
+            else:
+                text, omitted = doc.introduction, []
+                verdict = Verdict(ok=bool(sc.messages) and all(m.loc for m in sc.messages))
+                if not verdict.ok:
+                    verdict.notes.append("시나리오 호출 또는 근거 위치가 없습니다.")
+                self._record_review(f"scenario_{sid}", text, verdict, omitted, mode="extracted-scenario")
+            if omitted or not sc.messages:
+                verdict.ok = False
+                verdict.notes.append("시나리오 설명의 입력 근거가 비었거나 입력 예산에서 제외됐습니다.")
+                self._record_review(f"scenario_{sid}", text, verdict, omitted)
+            body_parts = [f"## 이 흐름에서 확인할 것\n\n{text}", doc.overview, doc.details]
             nxt = ordered[idx + 1][1] if idx + 1 < len(ordered) else None
             next_link = (nxt.title, f"scenarios/{nxt.id}.md") if nxt else ("핵심 시나리오 목록", "scenarios/index.md")
             path = self.cfg.sdd_dir / "scenarios" / f"{sid}.md"
             page = self._render(
-                title=sc.title, lead=f"`{sc.entry}` 에서 시작하는 호출 순서를 아래 번호대로 따라가세요.",
-                body="\n\n".join(body_parts), routes=None,
-                evidence=self._evidence_lines(blocks, [steps], verdict, omitted),
+                title=sc.title, lead=f"`{sc.entry}` 의 주요 호출과 추적 경계를 확인한 뒤 필요한 상세 기록을 펼쳐 보세요.",
+                body="\n\n".join(body_parts), routes=_routes_from_headings("\n\n".join(body_parts)),
+                evidence=self._evidence_lines(blocks, [doc.details], verdict, omitted),
                 next_link=next_link, status=_status(verdict), omitted=omitted,
-                extra={"section": sec["id"], "entry": sc.entry}, page_path=path)
+                extra={"section": sec["id"], "entry": sc.entry,
+                       "scenario_id": sid,
+                       "scenario_fingerprint": scenario_fingerprint(sc, self.scenario_cfg.get(sid, {})),
+                       "generation_method": generation_method(sec, self.cfg.agent.kind)}, page_path=path)
             out.append(self._write(path, page))
 
 
@@ -316,12 +334,18 @@ class Generator:
             index_body += ("\n\n확인 필요: 추적한 시나리오가 없습니다. " + reason
                            + " `sdd extract` 로그의 진입점 경고를 확인하고, `config/scenarios.yaml` 의"
                              " 시그니처를 대상 커밋의 정의와 대조해야 합니다.")
+        missing_ids = [sid for sid in self.scenario_order if sid not in self.model.scenarios]
+        if ordered and missing_ids:
+            index_verdict.ok = False
+            reason = "설정한 시나리오가 facts에 없습니다: " + ", ".join(missing_ids)
+            index_verdict.notes.append(reason)
+            index_body += "\n\n확인 필요: " + reason + ". 진입점과 추출 범위를 확인하세요."
         index_path = self.cfg.sdd_dir / sec.get("output", "scenarios/index.md")
         index_page = self._render(
             title=sec["title"], lead=sec.get("lead", ""), body=index_body, routes=routes,
             evidence=self._evidence_lines([], [], index_verdict, []),
             next_link=_next_of(sec), status=_status(index_verdict), omitted=[],
-            extra={"section": sec["id"]}, page_path=index_path)
+            extra={"section": sec["id"], "generation_method": "deterministic"}, page_path=index_path)
         out.append(self._write(index_path, index_page))
         return out
 
@@ -584,7 +608,7 @@ class Generator:
 
     def _write_section(self, sec: dict[str, Any], body: str, blocks: list[Block], tables: list[str],
                        verdict: Verdict, omitted: list[str], routes: list[tuple[str, str]] | None = None) -> Path:
-        extra = {"section": sec["id"]}
+        extra = {"section": sec["id"], "generation_method": generation_method(sec, self.cfg.agent.kind)}
         if requires_fingerprint(sec):
             extra["evidence_fingerprint"] = fingerprint(self.model, sec)
             extra["semantic_review"] = "human-review-required"
@@ -594,7 +618,8 @@ class Generator:
             status = "needs-review"
         path = self.cfg.sdd_dir / sec.get("output", f"{sec['id']}.md")
         page = self._render(title=sec["title"], lead=sec.get("lead", ""), body=body,
-                            routes=routes or _routes_from_config(sec) or _routes_from_headings(body),
+                            routes=routes or _routes_from_config(sec) or
+                                   (None if sec.get('design_requirements') else _routes_from_headings(body)),
                             evidence=self._evidence_lines(blocks, tables, verdict, omitted, self._entity_files(sec)),
                             next_link=_next_of(sec), status=status, omitted=omitted, extra=extra, page_path=path)
         return self._write(path, page)
@@ -605,10 +630,14 @@ class Generator:
         meta = {
             "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
             "source_commit": self.model.meta.get("source_commit", ""),
-            "agent": f"{self.cfg.agent.kind}/{self.cfg.agent.model}",
             "status": status,
             **extra,
         }
+        method = extra.get("generation_method", "")
+        if method in ("facts-and-llm", "mixed"):
+            meta["agent"] = f"{self.cfg.agent.kind}/{self.cfg.agent.model}"
+        label, scope = generation_info(method)
+        evidence = f"    - 생성 방식: {label}\n    - 검증 범위: {scope}\n" + evidence
         fm = "\n".join(f"{k}: {v}" for k, v in meta.items())
         if omitted:
             fm += "\nfacts_omitted:\n" + "\n".join(f"  - {o}" for o in omitted)
@@ -647,7 +676,7 @@ class Generator:
         ]
         if omitted:
             lines.append("- 입력 예산 때문에 제외된 사실: " + ", ".join(omitted))
-        lines.append(f"- 검토: {dt.date.today().isoformat()} · {self.cfg.agent.kind}/{self.cfg.agent.model} · 사람 검토 전")
+        lines.append(f"- 검토 상태 기록일: {dt.date.today().isoformat()} · 사람 검토 전")
         return "\n".join("    " + l for l in lines)
 
     def _existing_blocks(self, sec: dict[str, Any]) -> dict[str, str]:
@@ -716,11 +745,7 @@ def _hidden_message(m: Any, hide: dict[str, Any]) -> bool:
     로깅 매크로와 d-pointer 접근자는 호출 그래프에서 수가 많아서, 걸러내지 않으면 실제 흐름이
     묻힌다. 어떤 이름을 뺄지는 프로젝트마다 다르므로 scenarios.yaml 에서 정한다.
     """
-    owners = hide.get("owners") or []
-    names = hide.get("names") or []
-    return (any(fnmatch.fnmatch(m.dst, p) for p in owners)
-            or any(fnmatch.fnmatch(m.src, p) for p in owners)
-            or any(fnmatch.fnmatch(m.name, p) for p in names))
+    return hidden_message(m, hide)
 
 
 def _pkg_selected(name: str, pats: list[str]) -> bool:
@@ -763,32 +788,6 @@ def _class_fact(c: ClassInfo) -> str:
         lines.append(line)
     if len(c.methods) > 12:
         lines.append(f"  - (메서드 {len(c.methods) - 12} 개 생략)")
-    return "\n".join(lines)
-
-
-def _steps(messages: list[Any], hidden: int = 0) -> str:
-    """연속 중복을 합친 번호 목록. 각 단계에 file:line 을 붙인다."""
-    lines: list[str] = []
-    prev: tuple[str, str, str] | None = None
-    truncated = False
-    for m in messages:
-        key = (m.src, m.dst, m.name)
-        if key == prev:
-            continue
-        prev = key
-        if len(lines) >= _MAX_STEPS:
-            truncated = True
-            break
-        cite = f" `{m.loc.cite()}`" if m.loc else ""
-        note = f" ({m.note})" if m.note else ""
-        lines.append(f"{len(lines) + 1}. `{m.src}` 가 `{m.dst}::{m.name}()` 를 호출합니다.{note}{cite}")
-    if not lines:
-        return "호출 순서를 얻지 못했습니다. 확인 필요: 진입 함수 시그니처가 clang-uml 설정과 맞는지 확인하세요."
-    if truncated:
-        lines.append("\n(이후 단계는 생략했습니다. 전체 흐름은 `facts.json` 의 `scenarios` 에 있습니다.)")
-    if hidden:
-        lines.append(f"\n표시에서 뺀 호출이 {hidden} 개 있습니다. `config/scenarios.yaml` 의 `hide` 규칙에 걸린"
-                     " 로깅과 접근자 호출이며, `facts.json` 에는 그대로 남아 있습니다.")
     return "\n".join(lines)
 
 

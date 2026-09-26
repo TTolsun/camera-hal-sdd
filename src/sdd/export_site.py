@@ -14,6 +14,7 @@ import markdown
 
 from .config import Config, section_output
 from .diagrams import section_diagram, diagram_block
+from .document_metadata import generation_info
 from .export_html import _mermaid_fence, _nav_entries, _split, _title_of_text
 from .facts.model import KnowledgeModel
 
@@ -77,7 +78,7 @@ def _approval_label(state: str, entry: dict | None) -> str:
 
 def _status(meta: dict, approval: str = "unreviewed", approval_entry: dict | None = None) -> str:
     status = str(meta.get("status", "unrecorded"))
-    check_name = "자동 검사" if meta.get("semantic_review") else "인용 검사"
+    check_name = "자동 검사" if meta.get("semantic_review") or meta.get("generation_method") else "인용 검사"
     label = {"ok": f"{check_name} 통과", "needs-review": f"{check_name} 확인 필요"}.get(status, f"{check_name} 미기록")
     return (f'<span class="review-state">{html.escape(_approval_label(approval, approval_entry))}</span>'
             f'<span>{label} · <code>{html.escape(status)}</code></span>')
@@ -228,7 +229,7 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
             texts["index.md"] = (cfg.root / str(intro)).read_text(encoding="utf-8")
         else:
             texts["index.md"] = "# 문서 안내\n\n코드에서 추출한 구조와 문장별 근거를 함께 확인하세요.\n"
-        texts["index.md"] += "\n## 문서 목록\n\n| 문서 | 인용 검사 | 검토 상태 |\n|---|---|---|\n"
+        texts["index.md"] += "\n## 문서 목록\n\n| 문서 | 자동 검사 | 검토 상태 |\n|---|---|---|\n"
         for _, name, rel in entries:
             status = _split(texts[rel])[0].get("status", "unrecorded")
             label = _approval_label(approval_states.get(rel, "unreviewed"), ledger["pages"].get(rel))
@@ -246,10 +247,31 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
     diagram_sources = {}
     for group, name, rel in entries:
         meta, body = _split(texts[rel])
+        if meta.get("generation_method") and meta.get("generation_method") != "manual":
+            if model is None or meta.get("source_commit") != model.meta.get("source_commit"):
+                raise RuntimeError(f"Facts and page source commits differ: {rel}")
+        if meta.get("scenario_fingerprint"):
+            from .scenario_document import build as scenario_document, fingerprint as scenario_fingerprint
+            sid = str(meta.get("scenario_id", ""))
+            settings = next((s for s in cfg.scenarios() if s["id"] == sid), {})
+            sc = model.scenarios.get(sid) if model else None
+            if sc is None or meta["scenario_fingerprint"] != scenario_fingerprint(sc, settings):
+                raise RuntimeError(f"Scenario evidence changed; regenerate page before publishing: {rel}")
+            sc_section = next((s for s in cfg.sections() if s["id"] == meta.get("section")), {})
+            policy = {**(cfg.raw.get("diagrams") or {}), **(sc_section.get("diagram") or {})}
+            scenario_document(sc, settings, int(policy.get("max_nodes", 16)))
+            sources = re.findall(r"```mermaid\n(.*?)\n```", body, re.S)
+            if len(sources) == 1:
+                diagram_sources[rel] = sources[0]
         page_title = _title_of_text(body)
         body = re.sub(r"^\s*# .+\n", "", body, count=1)
         section = sections.get(rel, {})
         if section and section.get("kind") != "manual":
+            if section.get("design_requirements"):
+                from .design_contracts import enforce
+                if model is None:
+                    raise RuntimeError("facts.json is required to verify design requirements")
+                enforce(model, section)
             from .evidence import fingerprint, requires_fingerprint
             if requires_fingerprint(section) or meta.get("evidence_fingerprint"):
                 if model is None or meta.get("evidence_fingerprint") != fingerprint(model, section):
@@ -332,6 +354,10 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
                 _, dest_title, dest_rel = entries[other]
                 previous_next.append(f'<a class="{"previous" if offset < 0 else "next"}" href="{_href(_html_path(dest_rel), current)}"><small>{label}</small>{html.escape(dest_title)} {"←" if offset < 0 else "→"}</a>')
         info = []
+        method_label, method_scope = generation_info(str(meta.get("generation_method", "")))
+        if meta:
+            info.append(f'<dt>생성 방식</dt><dd>{html.escape(method_label)}</dd>')
+            info.append(f'<dt>검증 범위</dt><dd>{html.escape(method_scope)}</dd>')
         for key, label in [("source_commit", "분석 기준 커밋"), ("generated_at", "문서 생성 시각"), ("agent", "문장 생성 모델")]:
             if meta.get(key):
                 info.append(f'<dt>{label}</dt><dd><code>{html.escape(str(meta[key]))}</code></dd>')
@@ -347,6 +373,8 @@ def _render_site(cfg: Config, out: Path | None = None, mermaid_src: str | None =
         evidence = f'<section class="evidence"><h2 id="page-evidence">생성 근거</h2><dl>{"".join(info)}</dl>{downloads}</section>' if info else ""
         status = (_status(meta, approval_states.get(rel, "unreviewed"), ledger["pages"].get(rel))
                   if meta else '<span class="review-state">검토용 문서</span>')
+        if meta:
+            status += f'<span class="generation-method">{html.escape(method_label)}</span>'
         config_json = json.dumps({"root": root, "mermaid": mermaid_src}, ensure_ascii=False).replace("<", "\\u003c")
         doc = f'''<!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

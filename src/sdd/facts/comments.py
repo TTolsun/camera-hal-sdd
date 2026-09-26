@@ -154,7 +154,10 @@ def collect(model: KnowledgeModel, cfg: Config, entries: list[dict[str, Any]],
             stats["errors"] += 1
             continue
         stats["tus"] += 1
-        stats["errors"] += sum(1 for d in tu.diagnostics if d.severity >= cindex.Diagnostic.Error)
+        diagnostics = [d for d in tu.diagnostics if d.severity >= cindex.Diagnostic.Error]
+        stats["errors"] += len(diagnostics)
+        for diagnostic in diagnostics[:10]:
+            print(f"[comments] {diagnostic}")
 
         for cur in _walk(tu.cursor, root):
             key = f"{cur.kind.name}:{_qualified(cur)}:{cur.location.file.name}:{cur.location.line}"

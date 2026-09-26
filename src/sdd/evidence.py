@@ -26,14 +26,24 @@ _PRESENTATION_KEYS = ("group", "routes", "next", "watch")
 
 
 def requires_fingerprint(section: dict) -> bool:
-    return bool(section.get("semantic_review") or section.get("design_topics") or section.get("narration") == "facts")
+    return bool(section.get("semantic_review") or section.get("design_topics") or section.get("design_requirements")
+                or section.get("narration") == "facts")
 
 
 def collect(cfg: Config, model: KnowledgeModel) -> None:
+    from .design_contracts import configuration_errors
+
+    sections = cfg.sections()
+    # Fail before Git reads or replacing evidence, including the CLI path that
+    # collects excerpts before Generator.run validates required answers.
+    for sec in sections:
+        errors = configuration_errors(sec)
+        if errors:
+            raise ValueError(f"{sec['id']}: 설계 설정 오류: " + " / ".join(errors))
     records = {}
     commit = str(model.meta.get("source_commit", ""))
     cache = {}
-    for sec in cfg.sections():
+    for sec in sections:
         for topic in sec.get("design_topics", []):
             for source in topic.get("sources", []):
                 key = f"{sec['id']}/{topic['id']}/{source['id']}"
@@ -100,6 +110,10 @@ def contract_text(model: KnowledgeModel, section: str, topic: dict) -> tuple[str
     paragraphs, gaps = [], []
     sources = {s['id']: s for s in topic.get('sources', [])}
     for statement in topic.get('statements', []):
+        if not isinstance(statement.get('text'), str) or not statement['text'].strip():
+            gaps.append('비어 있는 설계 설명이 있습니다.')
+        if statement.get('kind', 'behavior') not in ('behavior', 'limitation'):
+            gaps.append('설계 설명의 kind는 behavior 또는 limitation이어야 합니다.')
         citations = []
         for ref in statement.get('evidence', []):
             source = sources.get(ref, {})
@@ -113,7 +127,8 @@ def contract_text(model: KnowledgeModel, section: str, topic: dict) -> tuple[str
                 citations.append(f"`{record['file']}:{record['line']}`")
         if not statement.get('evidence'):
             gaps.append('근거가 연결되지 않은 설계 설명이 있습니다.')
-        paragraphs.append(statement['text'] + ' ' + ', '.join(citations))
+        prefix = '실행 확인 항목: ' if statement.get('kind') == 'limitation' else ''
+        paragraphs.append(prefix + str(statement.get('text', '')) + ' ' + ', '.join(citations))
     if not paragraphs:
         gaps.append('설계 설명이 없습니다.')
     return ('확인 필요: ' + ' / '.join(gaps) if gaps else '\n\n'.join(paragraphs)), gaps

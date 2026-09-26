@@ -1,5 +1,6 @@
 #include "pipeline/PipeThread.h"
 #include "pipeline/Frame.h"
+#include <utility>
 
 namespace halcam {
 

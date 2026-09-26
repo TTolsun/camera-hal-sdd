@@ -25,6 +25,7 @@ from pathlib import Path, PurePosixPath
 from . import approvals as approvals_mod, compdb, extract, impact as impact_mod
 from .carryover import carry_forward
 from .config import Config, load
+from .document_metadata import generation_method
 from .facts.model import KnowledgeModel
 from .generate import Generator
 from .llm import Agent, AgentError
@@ -234,10 +235,17 @@ def cmd_generate(args: argparse.Namespace) -> int:
         for pth, invalid in stale:
             print(f"경고: {pth.relative_to(cfg.root).as_posix()} 의 인용 {len(invalid)}개가 새 facts 에 없습니다"
                   f" ({', '.join(invalid[:3])}). 이 섹션을 다시 생성해야 사이트를 게시할 수 있습니다.")
-    if report and cfg.agent.kind != "dry-run":
-        summary = agent.chat((cfg.prompts_dir / "system.md").read_text(encoding="utf-8"),
-                             (cfg.prompts_dir / "change_impact.md").read_text(encoding="utf-8")
-                             .format(facts=impact_mod.summary_facts(report, model)), tag="change_impact")
+    if report:
+        selected = set(args.sections.split(",")) if args.sections else set(report.sections)
+        needs_llm = any(generation_method(s, cfg.agent.kind) in ("facts-and-llm", "mixed")
+                        for s in cfg.sections() if s["id"] in report.sections and s["id"] in selected)
+        summary = impact_mod.summary_facts(report, model)
+        if needs_llm:
+            summary = agent.chat((cfg.prompts_dir / "system.md").read_text(encoding="utf-8"),
+                                 (cfg.prompts_dir / "change_impact.md").read_text(encoding="utf-8")
+                                 .format(facts=summary), tag="change_impact")
+        else:
+            summary = "# 변경 영향 요약\n\n추출 사실과 영향 보고서로 구성한 요약입니다.\n\n" + summary
         (cfg.build_dir / "change_impact.md").write_text(summary + "\n", encoding="utf-8")
         print("-> build/change_impact.md (리뷰어용 변경 요약)")
     if (cfg.raw.get("site") or {}).get("enabled", False):
@@ -437,7 +445,7 @@ def main(argv: list[str] | None = None) -> int:
         p.error("run의 --base-facts와 --fail-on-coverage-gap에는 --base가 필요합니다.")
     try:
         return int(args.fn(args))
-    except (AgentError, FileNotFoundError, RuntimeError, subprocess.CalledProcessError) as e:
+    except (AgentError, FileNotFoundError, RuntimeError, ValueError, subprocess.CalledProcessError) as e:
         print(f"오류: {e}", file=sys.stderr)
         return 1
 

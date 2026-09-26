@@ -4,11 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 프로젝트 개요
 
-Camera HAL 소스에서 검토용 설계 문서(SDD)를 생성하고, 코드 변경에 맞춰 증분 갱신하는 파이프라인입니다. Clang(compile DB)으로 구조와 근거 위치를 추출하고, LLM으로 한국어 설명 초안을 작성합니다. 최종 적용 대상은 사내 Camera HAL이며, 공개 libcamera는 검증용 테스트 대상입니다. 생성 문서의 디자인 계약은 `DESIGN.md`를 따릅니다.
+Camera HAL 소스에서 검토용 설계 문서(SDD)를 생성하고, 코드 변경에 맞춰 증분 갱신하는 파이프라인입니다. Clang(compile DB)으로 구조와 근거 위치를 추출하고, 소스에 연결한 설계 설명과 facts로 문서를 구성합니다. 선택한 섹션에는 LLM으로 한국어 설명 초안을 작성할 수 있습니다. 최종 적용 대상은 사내 Camera HAL이며, 공개 libcamera는 검증용 테스트 대상입니다. 생성 문서의 디자인 계약은 `DESIGN.md`를 따릅니다.
 
 프로젝트 목적과 작업 기준은 아래 문서를 그대로 따릅니다.
 
 @AGENTS.md
+
+## 사내 문서 자동화 구축 요청을 받았을 때
+
+[사내 Claude 구축 가이드](docs/inhouse-agent-bootstrap.md)를 읽고 실제 HAL 한 경로의 추출·설계 문서·변경 반영 검증부터 진행합니다. 가이드에는 초기 입력, 프로젝트 설정 작성, 사내 CI 연결, 완료 기준과 인계할 결과가 있습니다. 사내 정보가 없을 때 공개 libcamera 결과만으로 사내 적용 완료를 선언하지 않습니다.
+
+설계 질문과 소스에 연결한 설명은 프로젝트별 설정으로 작성합니다. `design_requirements`·`covers`·`evidence` 검사를 사용하고, 근거 변경 시 해시만 교체하지 말고 연결된 설명을 재검토합니다. Claude의 구축 작업과 생성기의 `agent.kind` 모델 호출 설정은 별개입니다. 생성물의 직접 수정과 자동 검사에 근거한 사람 승인 대행은 하지 않습니다.
 
 ## 자주 쓰는 명령
 
